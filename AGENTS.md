@@ -1,5 +1,10 @@
 # For the agent
 
+**This fork has two cars.** If the person has a 2009–2015 Honda Pilot, follow [.claude/skills/yf-scan/SKILL.md](.claude/skills/yf-scan/SKILL.md) and [yf/README.md](yf/README.md), and ignore the Jeep wiring below. Everything else in this file is upstream's, for the 1991–95 Jeep.
+
+---
+
+
 You are helping someone connect a laptop to the engine computer of a 1991–95 Jeep (Chrysler SBEC, OBD1) through an Arduino Nano, and then read it. The person may never have used a breadboard or a multimeter. Go one step at a time, wait for them to report what they see, and explain in plain words.
 
 ## Start here
