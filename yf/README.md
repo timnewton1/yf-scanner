@@ -22,11 +22,11 @@ python3 -m venv .venv && .venv/bin/pip install -r yf/requirements.txt
 .venv/bin/python yf/yf_scan.py --codes                 # check engine light, stored + pending codes, readiness
 .venv/bin/python yf/yf_scan.py --supported             # which standard PIDs this car answers
 .venv/bin/python yf/yf_scan.py --misfires              # Mode 06 misfire counters per cylinder
-.venv/bin/python yf/yf_scan.py --honda-probe           # candidate Honda reads (ATF temp, VCM), raw bytes
+.venv/bin/python yf/yf_scan.py --protocol 7 --honda-probe   # Honda reads (ATF temp, VCM) on 29-bit, raw bytes
 
 # engine running
 .venv/bin/python yf/yf_scan.py --tag baseline          # log a drive; Enter drops a noise marker
-.venv/bin/python yf/yf_scan.py --set noise --honda     # faster rows for noise hunting, plus Honda candidates
+.venv/bin/python yf/yf_scan.py --protocol 7 --set noise --honda   # noise hunting, plus Honda candidates
                                                        # (add --honda only once --honda-probe gets answers; silent reads slow every row)
 .venv/bin/python yf/tools/summarize.py yf/logs/yf_XXXX.csv
 ```
@@ -59,12 +59,12 @@ Logs go to `yf/logs/` (git-ignored), one CSV per run, flushed every row.
 | Path | What |
 |---|---|
 | `yf_scan.py` | Codes, readiness, supported PIDs, Mode 06 misfires, drive logging with markers, DEMO car |
-| `honda.py` | Candidate Honda Mode 22 reads with raw-byte probe |
+| `honda.py` | Candidate Honda Mode 22 reads with raw-byte probe; 29-bit `DA1DF1` addressing under `--protocol 7` |
 | `tools/summarize.py` | Warm-up, charging, trims by condition, bank difference, markers |
 | `docs/honda-enhanced.md` | What's known about Honda-only data on this generation, and the sniff-and-replay plan |
 
 ## To do
 
-- First real run: `--supported`, `--codes`, `--misfires`, `--honda-probe`; record the results in the docs.
+- First real run: `--supported`, `--codes`, `--misfires`, then `--protocol 7 --honda-probe`; record the results in the docs.
 - Unattended mode for a Raspberry Pi: wait for the PCM, one file per drive, GPIO button for markers. The Pilot's 12 V outlets are live only in ACC/ON (2011 owner's manual p. 190), so a car charger won't drain the battery.
 - Capture-and-decode tooling for Honda traffic (CANable / SocketCAN).

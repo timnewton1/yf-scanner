@@ -115,7 +115,7 @@ def as_cell(name, value):
 
 def open_car(port, timeout, fast, check_voltage=True, protocol=None):
     if port == "DEMO":
-        return FakeCar()
+        return FakeCar(protocol or "6")
     conn = obd.OBD(None if port == "auto" else port, fast=fast, timeout=timeout,
                    check_voltage=check_voltage, protocol=protocol)
     st = conn.status()
@@ -123,6 +123,8 @@ def open_car(port, timeout, fast, check_voltage=True, protocol=None):
         conn.close()
         sys.exit(f"Not connected ({st}). {STATUS_HELP.get(st, '')}")
     print(f"Connected: {conn.port_name()}, {conn.protocol_name()}")
+    if honda.is_29bit(conn):
+        honda.use_29bit_standard_headers()
     return conn
 
 
@@ -236,7 +238,7 @@ def log_drive(conn, names, seconds, tag, with_honda=False):
         sys.exit("None of the requested PIDs are supported.")
     if skipped:
         print(f"Not answered by this PCM, skipped: {', '.join(skipped)}")
-    extras = [(c, honda.command(c)) for c in honda.CANDIDATES] if with_honda else []
+    extras = [(c, honda.command(c, honda.headers(conn)[0])) for c in honda.CANDIDATES] if with_honda else []
     log = CsvLog(names + [c["name"] for c, _ in extras], [PIDS[n][0] for n in names] + [c["label"] for c, _ in extras], tag)
     markers = queue.Queue()
     if sys.stdin.isatty():
@@ -281,7 +283,8 @@ class FakeResponse:
 class FakeCar:
     """A made-up Pilot: cold start, warm-up, a bit of driving. Lets the laptop side be tested at home."""
 
-    def __init__(self):
+    def __init__(self, protocol="6"):
+        self.protocol = protocol
         self.t0 = time.monotonic()
         self.supported_commands = {obd.commands[n] for n in PIDS if n not in ("O2_S2_WR_CURRENT", "O2_S3_WR_CURRENT",
                                                                                "O2_S4_WR_CURRENT", "O2_S6_WR_CURRENT")}
@@ -296,6 +299,9 @@ class FakeCar:
     def close(self):
         pass
 
+    def protocol_id(self):
+        return self.protocol
+
     def query(self, cmd, force=False):
         time.sleep(0.02)
         t = time.monotonic() - self.t0
@@ -304,7 +310,7 @@ class FakeCar:
         rpm = 700 + speed * 45 + 150 * math.sin(t)
         n = cmd.name
         if n.startswith("HONDA_"):
-            if cmd.header != b"7E0":
+            if cmd.header != b"DA1DF1":  # like the '09 report: Honda reads answer only on 29-bit DA1DF1
                 return FakeResponse(None)
             data = [0] * 60
             data[26] = 40 + 70 + int(t)  # ~158 F and climbing
@@ -360,7 +366,8 @@ def main():
     ap.add_argument("--fast", action="store_true", help="python-OBD fast mode; off by default, clones handle it badly")
     ap.add_argument("--no-voltage-check", action="store_true", help="skip the adapter's battery-voltage check "
                     "(some clones report it wrong and refuse to connect)")
-    ap.add_argument("--protocol", help="force the OBD protocol instead of auto-detect; 6 = ISO 15765-4 CAN 11-bit 500k")
+    ap.add_argument("--protocol", help="force the OBD protocol instead of auto-detect: 6 = CAN 11-bit 500k, "
+                    "7 = CAN 29-bit 500k (what owners used for Honda reads like ATF temp)")
     ap.add_argument("--codes", action="store_true", help="check engine light, stored/pending codes, readiness, then exit")
     ap.add_argument("--supported", action="store_true", help="list the Mode 01 PIDs the PCM answers, then exit")
     ap.add_argument("--misfires", action="store_true", help="Mode 06 misfire counters per cylinder, then exit")

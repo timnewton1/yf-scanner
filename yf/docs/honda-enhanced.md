@@ -4,27 +4,38 @@ Standard OBD2 covers engine and emissions data. Transmission temperature, VCM (c
 
 ## Candidate reads (Mode 22, read-only)
 
-| Name | Request | Torque equation | Decoded as | Source | Status on YF |
+| Name | Request | Torque equation | Decoded as | Address that worked | Status on a 2nd-gen Pilot |
 |---|---|---|---|---|---|
-| ATF temp | `22 2201` | `AA-40` (°C) | byte 27 after `62 22 01`, minus 40 | [vcmtuner Torque PID list](https://www.vcmtuner.com/pages/torque-pro-app-enhanced-honda-pids-for-vcmtuner-and-vcmtuner-ii) (tested on a 2022 Odyssey); Piloteers 3rd-gen owners | untested |
-| VCM active cylinders | `22 2615` | `AY` | byte 51 after `62 26 15` | same list; a Piloteers post citing a Ridgeline list | untested |
-| ECT 1 / 2 | `01 67` | `B-40` / `C-40` | standard PID 0x67 | same list | `--supported` will show it |
+| ATF temp | `22 2201` | `AA-40` °C, written by owners as `AA*(9/5)-40` °F (same value) | byte 27 after `62 22 01`, minus 40 | 29-bit: `ATSP7` + `ATSH DA1DF1` | **reported working** on an '09 LX and two 2014s (forum reports, unverified) |
+| VCM active cylinders | `22 2615` | `AY` | byte 51 after `62 26 15` | not stated | one poster, vehicle not stated (2016–2022 forum); no 2nd-gen report |
+| ECT 1 / 2 | `01 67` | `B-40` / `C-40` | standard PID 0x67 | standard | `--supported` will show it |
 
-Reports on these strings (`unverified`, from Piloteers thread summaries):
-- Header handling varies: some leave it blank (defaults to the engine computer, 7E0); others used `ATSP7` with `ATSH DA1DF1` (29-bit addressing), or `ATH0`. `yf_scan --honda-probe` asks 7E0 and 7E1 with 11-bit headers. If both stay silent, 29-bit addressing is the next thing to try.
-- One owner got a constant −40 (a zero byte, so wrong address or offset). One said a cheap adapter returned the wrong packet for 2201.
-- Torque Pro's built-in "transmission temp" on some Hondas just mirrors coolant temp ([BITOG](https://bobistheoilguy.com/forums/threads/honda-atf-temp-via-scan-tool.218312/)). Cross-check any ATF reading with a thermocouple on the cooler line.
+`yf_scan.py --protocol 7 --honda-probe` sends these to `DA1DF1`. Without `--protocol 7` it tries 11-bit 7E0/7E1, which an '09 owner reported connecting but returning no ATF reading.
 
-Threads that likely hold exact strings (blocked to automated readers; read in a browser):
-- https://www.piloteers.org/threads/monitor-honda-custom-obd2-pids-transmission-temp-etc.137202/
-- https://www.piloteers.org/threads/transmission-temp-with-obd-scanner.149657/
-- https://www.piloteers.org/threads/monitoring-automatic-transmission-fluid-temperature.78370/
-- https://www.piloteers.org/threads/transmission-temperature-monitoring.155273/
-- https://www.piloteers.org/threads/monitoring-vcm-cylinder-deactivation-using-an-obd2-scanner.179153/
+### What owners reported (Piloteers, owner posts, unverified)
+
+ATF temp, 2nd-gen Pilots:
+- **'09 LX, Torque Pro + Veepeak (2018, 2021):** `222201`, `AA*(9/5)-40`, −40 to 300 °F. Init string `ath0` worked at first, later stopped; `atsp7\natshda1df1` then worked. With no init string the ECU connected but no ATF value came back. Torque and Car Scanner matched exactly; cold ATF matched coolant within 1 °C.
+- **2014 Touring, Engine Link + WiFi ELM327 (2015):** same PID and equation, "confirmed"; ATF settled around 140 °F.
+- **2014 EX-L 4WD, OBD Fusion + Foseal WiFi (2018):** mode `22`, PID `2201`, header "ECM", `(AA*(9/5)-40)`.
+- **2011 EX-L and a '15, ScanGauge II (2015, 2020):** XGauge `TXD 1DF1222201`, `RXF 032400000000`, `RXD 2808`, `MTH 00090005FFD8`. "Should work on '07 and above." 190–230 °F towing in the desert.
+- **Car Scanner ELM OBD2 (free app):** has a built-in "ATF Temp F" with the "Honda OBD-II/EOBD + AT (CAN)" profile.
+
+Also reported working on: 2016–2020 Pilots, 2014 Ridgeline, 2012 Crosstour, 2008 Civic Hybrid, 2012 Civic.
+
+Failures:
+- Constant −40 / −41.8 (a zero byte: wrong address or no data). One owner fixed it by switching from a cheap adapter to a BAFX.
+- **Cheap clones answering the wrong request:** a 2014 Ridgeline owner's clone returned the `2200` packet for `2201`, but was fine on standard PIDs. A VGate iCar Pro worked. The probe checks the `62 22 01` echo, so this shows up as "answered the wrong request".
+- Adapters reported working: Veepeak, VGate iCar Pro / Icar2, OBDLink MX, BAFX, Foseal WiFi. Failed or suspect: cheap Wish clones, Kobra.
+- OBD Fusion owners disagree on header: "ECM" worked for one; several others needed it blank.
+
+Nobody quotes the service manual on the ATF sensor. One poster (no source): thermistor on a 5 V reference, 0.5–4.5 V normal, an open circuit reads −40. Sensor location is unknown. Cross-check against a thermocouple on the cooler line before trusting absolute numbers.
+
+Other Honda reads: none posted for VTM-4, torque converter, gear, fan, oil life or A/F sensors. Sources that may have more: the Ridgeline Owners Club thread "Custom PIDs for ODB scantool/app like Torque or CarScanner" (source of `2615`), and an Odyclub thread "Transmission Temperature with Torque app and ELM327" (page 2, post #16).
 
 ## VCM and the ECO light
 
-No standard PID shows VCM. Owners disagree on what the dash ECO light means (VCM active vs. just efficient driving), so it's a weak stand-in. The `22 2615` candidate is the best lead.
+No standard PID shows VCM. 2nd-gen Pilots (2015 and earlier) have a dash ECO light; 2016+ don't. Owners disagree on what it means, and nobody states what triggers it on the 2nd gen, so it's a weak stand-in. The one `22 2615` report says VCM never cut cylinders below about 25 mph or at a stop, cycled often, and small throttle inputs brought all six back (vehicle not stated).
 
 ## Bus layout (expected, unverified)
 

@@ -13,7 +13,7 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 2. `.venv/bin/python yf/yf_scan.py --port DEMO --codes`. This must work before the car is involved.
 3. Adapter into the laptop, then into the OBD port under the dash, key ON.
 4. `.venv/bin/python yf/yf_scan.py --codes`. If it won't connect, use the "Connecting" table in the README, one change at a time.
-5. Then `--supported`, `--misfires`, `--honda-probe`. Save the output: it's the first real data on what this car answers. Record it in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md) and the README's PID notes.
+5. Then `--supported`, `--misfires`, and `--protocol 7 --honda-probe` (Honda reads answered on 29-bit addressing for owners; if `--protocol 7` won't connect at all, report that and fall back to plain `--honda-probe`). Save the output: it's the first real data on what this car answers. Record it in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md) and the README's PID notes.
 
 ## Common asks
 
@@ -21,7 +21,7 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 |---|---|---|
 | "Any codes?" | `--codes` | Give each code, whether it's stored or pending, and which readiness monitors are incomplete |
 | "Log my drive" | `--tag <word>`; Ctrl+C at the end | Remind them: Enter = marker, a word first labels it. Passenger works the laptop |
-| "Chasing a noise" | `--set noise --honda --tag noise` | Fewer PIDs, faster rows. Ask them to mark every time they hear it, and to try to reproduce it at different gears and speeds |
+| "Chasing a noise" | `--protocol 7 --set noise --honda --tag noise` (drop `--protocol 7 --honda` if the Honda reads never answered) | Fewer PIDs, faster rows. Ask them to mark every time they hear it, and to try to reproduce it at different gears and speeds |
 | "Summarize that log" | `.venv/bin/python yf/tools/summarize.py yf/logs/<file>.csv` | Then read the CSV yourself for anything the summary doesn't cover |
 | "Misfires?" | `--misfires` | Per-cylinder counts. Uneven counts on one cylinder are worth following up (plug, coil, injector) |
 
