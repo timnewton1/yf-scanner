@@ -32,8 +32,23 @@ def stats(vals):
     return f"mean {st.mean(vals):6.1f}  min {min(vals):6.1f}  max {max(vals):6.1f}" if vals else "no data"
 
 
+LINK = ("timeout", "link lost", "reconnected")  # rows the logger writes about the link, not noise markers
+
+
+def is_link(m):
+    return m.startswith(LINK)
+
+
 t = col("elapsed_s")
-print(f"{path}\n{len(rows)} rows over {t[-1]:.0f} s ({len(rows) / max(t[-1], 1):.2f} rows/s)")
+data_rows = [r for r in rows if not is_link(r.get("marker", ""))]
+print(f"{path}\n{len(data_rows)} rows over {t[-1]:.0f} s ({len(data_rows) / max(t[-1], 1):.2f} rows/s)")
+link = [r for r in rows if is_link(r.get("marker", ""))]
+if link:
+    lost = sum(r["marker"].startswith("link lost") for r in link)
+    slow = sum(r["marker"] == "timeout" for r in link)
+    print(f"Link: {lost} drop(s), {slow} timeout(s). Gaps in the data at: "
+          + ", ".join(f"{num(r, 'elapsed_s'):.0f} s" for r in link if r["marker"].startswith("link lost")))
+rows = data_rows
 
 # warm-up
 ect = [(num(r, "elapsed_s"), num(r, "coolant F")) for r in rows if num(r, "coolant F") is not None]
@@ -78,6 +93,12 @@ for k in ("ATF F (candidate)", "VCM cylinders (candidate)"):
     vals = col(k)
     if vals:
         print(f"\n{k}: {stats(vals)}  (unconfirmed decode, cross-check before trusting)")
+vcm = [(num(r, "VCM cylinders (candidate)"), moving(r)) for r in rows if num(r, "VCM cylinders (candidate)") is not None]
+if vcm:
+    cut = [mph for c, mph in vcm if c < 6]
+    print(f"  rows with fewer than 6 cylinders: {len(cut)} of {len(vcm)}"
+          + (f", at {min(cut):.0f}-{max(cut):.0f} mph" if cut else
+             " (VCM cuts cylinders on a light steady cruise; none seen yet, or the decode is wrong)"))
 
 # markers
 marks = [(i, r) for i, r in enumerate(rows) if r.get("marker")]

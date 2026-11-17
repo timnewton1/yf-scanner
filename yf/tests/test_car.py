@@ -139,6 +139,34 @@ class TestQuirks(unittest.TestCase):
         self.assertEqual(elm.adapter.classify({"chip": "ELM327 v1.4b", "stn": "STN2120 v5.6.19"}, "USB/serial")[0], "STN")
 
 
+class TestLogger(unittest.TestCase):
+    def test_reconnects_into_the_same_file_and_stops_when_the_engine_does(self):
+        car = Car.open(CLEAN)
+        lg = logger.Logger(car, ["RPM", "SPEED"], reopen=lambda: Car.open(CLEAN), quiet=True)
+        lg.retry_delay = 0
+        n = [0]
+
+        def stop(cells):
+            n[0] += 1
+            if n[0] == 3:
+                lg.car.elm.port.broken = True  # the BLE link drops
+            if n[0] == 6:
+                lg.car.elm.port.sim.car.running = False  # engine off
+            return cells.get("RPM") == 0
+
+        with tempfile.TemporaryDirectory() as d:
+            log = logger.CsvLog(lg.columns, "t", d)
+            why = lg.run(log, None, stop_when=stop)
+            log.close()
+            with open(log.path, encoding="utf-8") as f:
+                text = f.read()
+        lg.car.close()
+        self.assertEqual(why, "stopped")
+        self.assertIn("link lost", text)
+        self.assertIn("reconnected", text)
+        self.assertTrue(text.strip().splitlines()[-1].split(",")[3] in ("0.0", "0"))
+
+
 def run_cli(*argv):
     out = io.StringIO()
     with contextlib.redirect_stdout(out):

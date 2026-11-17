@@ -61,7 +61,7 @@ class CsvLog:
                              ["" if cells.get(n) is None else cells[n] for n in self.names])
         self.file.flush()  # every row: a pulled plug loses one row, not the file
         self.rows += 1
-        if self.rows % 20 == 0:
+        if self.rows % 10 == 0:
             os.fsync(self.file.fileno())  # a Pi losing power mid-drive keeps all but the last few seconds
 
     def close(self):
@@ -108,6 +108,8 @@ class Markers:
 # --- the logging loop -------------------------------------------------------------
 
 class Logger:
+    retry_delay = 3.0  # seconds between reconnect attempts
+
     def __init__(self, car, names, with_honda=False, reopen=None, quiet=False):
         """car: an open Car. reopen: callable() -> Car, used to reconnect after a dropped link."""
         self.car = car
@@ -137,7 +139,7 @@ class Logger:
             pass
         start = time.monotonic()
         while give_up_after is None or time.monotonic() - start < give_up_after:
-            time.sleep(3)
+            time.sleep(self.retry_delay)
             try:
                 car = self.reopen()
             except (NotConnected, ElmError, OSError):

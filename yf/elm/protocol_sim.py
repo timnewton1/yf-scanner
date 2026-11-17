@@ -34,6 +34,7 @@ class Serial(SerialBase):
                                latency=float(opts.get("latency", ["0.15"])[0]))
         self._out = bytearray()
         self._cv = threading.Condition()
+        self.broken = False  # set True to act like a BLE link that just dropped
         self.is_open = True
 
     def close(self):
@@ -51,6 +52,8 @@ class Serial(SerialBase):
     def read(self, size=1):
         if not self.is_open:
             raise PortNotOpenError()
+        if self.broken:
+            raise SerialException("simulated link dropped")
         with self._cv:
             if not self._out:
                 self._cv.wait(self._timeout or 0)
@@ -61,6 +64,8 @@ class Serial(SerialBase):
     def write(self, data):
         if not self.is_open:
             raise PortNotOpenError()
+        if self.broken:
+            raise SerialException("simulated link dropped")
         out = self.sim.feed(bytes(data))
         with self._cv:
             self._out.extend(out)

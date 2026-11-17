@@ -65,6 +65,7 @@ class Pilot:
                       TCM: {"stored": [], "pending": [], "permanent": []}}
         self.misfire = {c: (0, 0) for c in range(1, 7)}  # cylinder -> (this cycle, average)
         self.evap_incomplete = False
+        self.running = True  # False: key on, engine off (rpm 0)
         if demo:  # something to look at in DEMO output
             self.codes[ECM]["stored"] = ["P3400"]
             self.misfire[3] = (12, 4)
@@ -74,8 +75,8 @@ class Pilot:
 
     def state(self):
         t = self.clock() - self.t0
-        mph = max(0.0, 40 * math.sin((t - 10) / 20)) if t > 10 else 0.0
-        rpm = 700 + mph * 30 + 120 * math.sin(t)
+        mph = max(0.0, 40 * math.sin((t - 10) / 20)) if t > 10 and self.running else 0.0
+        rpm = 700 + mph * 30 + 120 * math.sin(t) if self.running else 0.0
         coolant = min(88.0, self.start_coolant + t * 1.5)
         throttle = 12 + mph / 3
         steady = 30 < mph < 60 and abs(math.cos((t - 10) / 20)) < 0.5
