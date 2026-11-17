@@ -1,8 +1,8 @@
 # yf-scanner
 
-Read a **2009–2015 Honda Pilot (YF3/YF4)** from a laptop over OBD2, and let an AI agent do the reading with you.
+Read a **2009–2015 Honda Pilot (YF3/YF4)** over OBD2 from a laptop or an Android phone, and let an AI agent do the reading with you.
 
-An off-the-shelf ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini, a thumb-sized Bluetooth dongle) plugs into the OBD port under the dash. A small Python scanner with its own ELM327 driver reads both the engine and transmission computers. No wiring, no tools. Runs on Linux, WSL2, Windows and macOS, and on a Raspberry Pi that logs every drive by itself.
+An off-the-shelf ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini, a thumb-sized Bluetooth dongle) plugs into the OBD port under the dash. A small Python scanner with its own ELM327 driver reads both the engine and transmission computers. No wiring, no tools. Runs on Linux, WSL2, Windows and macOS, on a Raspberry Pi that logs every drive by itself, and on an Android phone, where an app runs the same Python.
 
 Goals: find out what's behind noises and rough running, and catch slow drift (fuel trims, misfires, warm-up, charging, transmission temperature) before it gets expensive.
 
@@ -13,12 +13,13 @@ Goals: find out what's behind noises and rough running, and catch slow drift (fu
 
 The agent reads [AGENTS.md](AGENTS.md) and walks you through it one step at a time.
 
-**Status:** runs on a real 2011 Pilot 4WD (2026-11-16) through the reference adapter over BLE, from WSL2. Windows-native is set up but not yet run with this version. What the car answered is in [docs/honda-enhanced.md](docs/honda-enhanced.md).
+**Status:** runs on a real 2011 Pilot 4WD (2026-11-16) through the reference adapter over BLE, from WSL2. Windows-native is set up but not yet run with this version. What the car answered is in [docs/honda-enhanced.md](docs/honda-enhanced.md). The Android app builds, runs the simulated Pilot and finds the adapter. A bug that stopped it connecting was fixed on 2026-11-17, but it hasn't connected to the car yet.
 
 ## What you need
 
 - An **ELM327 v1.5 BLE mini**: the generic thumb-sized "Bluetooth 5.1, iPhone and Android" adapter. This is the type the repo is built around; ours is a ViaBecs OBD-HT. What it is, its quirks, and how to check yours: [docs/adapters.md](docs/adapters.md). Other ELM327s (USB, Bluetooth Classic, Wi-Fi, STN-based) work through the same code.
-- A laptop with Python 3 and Bluetooth: Linux, Windows, WSL2 or macOS. A Raspberry Pi can ride in the car and log every drive. Setup for each: [docs/platforms.md](docs/platforms.md).
+- A laptop with Bluetooth: Linux, Windows, WSL2 or macOS. It needs Python 3.10 or newer, which setup installs through [uv](https://docs.astral.sh/uv/) if it's missing. A Raspberry Pi can ride in the car and log every drive. Setup for each: [docs/platforms.md](docs/platforms.md).
+- Or an Android phone (Android 8 or newer, with Bluetooth LE) running the app in [android/](android/README.md).
 - The OBD port is under the dash, driver's side. No tools, no wiring.
 
 ## Use
@@ -33,7 +34,7 @@ Everything below in one terminal screen, with tabs for connecting, the health ch
 Keys `1`-`7` switch tabs, `r` refreshes the current one, `m` drops a noise marker while recording, `q` quits. Clearing codes is on the Health tab and asks you to type `clear` first. The command line does the same things:
 
 ```sh
-setup/setup.sh                                 # Linux / WSL / Pi: venv, requirements, Bluetooth
+setup/setup.sh                                 # Linux / WSL / Pi: uv, .venv (uv sync), Bluetooth
 .venv/bin/python scan.py --port DEMO --report  # simulated Pilot: prove the laptop side first
 .venv/bin/python scan.py --adapters            # what's plugged in / in Bluetooth range
 .venv/bin/python scan.py --adapter-info        # connect, save the adapter; its chip and link (key off is fine)
@@ -53,7 +54,7 @@ setup/setup.sh                                 # Linux / WSL / Pi: venv, require
 .venv/bin/python summarize.py logs/yf_XXXX.csv
 ```
 
-On a phone instead of a laptop: the Android app in [android/](android/README.md) (`setup/android-sdk.sh --install`).
+**On a phone instead of a laptop:** the Android app in [android/](android/README.md) has the same reads, drive logging with a big MARK button, and log summaries. Its logs use the same CSV columns, so `summarize.py` on the laptop reads them too. `setup/android-sdk.sh --build` builds `android/app/build/outputs/apk/debug/app-debug.apk`: copy it to the phone and open it. With a phone on USB (USB debugging on), `--install` builds and installs it in one step.
 
 Windows without WSL: the same commands through `setup\windows.ps1`, e.g. `powershell -ExecutionPolicy Bypass -File setup\windows.ps1 --report`.
 
@@ -105,15 +106,17 @@ The log summary line reports link quality: how many requests were retried becaus
 | `android/` | The Android app: the same reads, logging with a MARK button, and summaries on a phone. Build: [android/README.md](android/README.md) |
 | `tui.py` | The terminal UI (Textual) over the same layers: connect, health, live + CSV log, Mode 06, info, console, log summaries |
 | `summarize.py` | A drive log's timeline, warm-up, charging, trims by condition (coasting apart), bank difference, long-term trim changes, VCM, markers |
-| `scanner/` | The library the three commands use |
+| `scanner/` | The library the three commands and the Android app use |
 | `scanner/car.py` | The car: finds the modules, reads each one by its own address, decodes |
+| `scanner/report.py` | Each read as titled sections of lines: `scan.py` prints them, `tui.py` styles them, the app shows them as cards |
+| `scanner/phone.py` | The Android app's entry point into the scanner (Chaquopy): connect, reads, drive log, summary, as JSON |
 | `scanner/honda.py` | The Pilot's module addresses, Honda Mode 22 candidates and which module answers each |
 | `scanner/logger.py` | Drive logs: CSV, markers (keyboard or Pi button), reconnect after a dropped link, unattended mode |
 | `scanner/elm/` | The adapter: `session.py` (the ELM327 dialogue, per-module requests, ISO-TP), `adapter.py` (ports, identifying the chip), `ble.py` (BLE transport) |
 | `scanner/obd2/` | SAE J1979 decoding: Mode 01 PIDs, readiness, trouble codes, Mode 06 |
 | `scanner/sim/` | Simulated reference adapter + 2011 Pilot, modeled on the real one (`--port DEMO`, tests) |
-| `tests/` | Parser tests on captured replies; car, CLI, TUI, logger and transport tests against the simulator |
-| `setup/` | `setup.sh` (Linux/WSL/Pi), `windows.ps1`, `wsl-attach-bluetooth.ps1`, `pi-logger.sh` |
+| `tests/` | Parser tests on captured replies; car, CLI, TUI, logger, transport and phone-app bridge tests against the simulator |
+| `setup/` | `setup.sh` (Linux/WSL/Pi), `windows.ps1`, `wsl-attach-bluetooth.ps1`, `pi-logger.sh`, `android-sdk.sh` (builds the app) |
 | `docs/` | [adapters](docs/adapters.md), [platforms](docs/platforms.md), [honda-enhanced](docs/honda-enhanced.md) |
 | `logs/` | Drive logs (git-ignored) |
 
@@ -125,6 +128,7 @@ The log summary line reports link quality: how many requests were retried becaus
 
 - Confirm the Honda decodes: ATF against a thermocouple on the cooler line; VCM against the ECO light on a light steady cruise (expect 3 cylinders).
 - A first real drive log (`--tag baseline --honda`): trims at cruise, VCM behavior, ATF under load.
+- Connect the Android app to the car through the reference adapter, and log a drive with it.
 - Capture-and-decode tooling for Honda traffic (CANable / SocketCAN), for anything the dealer tool reads that Mode 22 candidates don't cover.
 
 ## Credits and license
