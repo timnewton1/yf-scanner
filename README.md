@@ -1,6 +1,6 @@
 # yf-scanner
 
-> **This fork adds [`yf/`](yf/README.md): the same idea for a 2009–2015 Honda Pilot (YF3/YF4) over standard OBD2 with a cheap ELM327 adapter and python-OBD.** No Arduino or wiring needed on the Honda. Everything outside `yf/` (and the `yf-scan` skill) is upstream's Jeep scanner, unchanged: [MZULALI/xj-scanner](https://github.com/MZULALI/xj-scanner).
+> **This fork adds [`yf/`](yf/README.md): the same idea for a 2009–2015 Honda Pilot (YF3/YF4) over standard OBD2 with an ELM327 v1.5 BLE mini (a thumb-sized Bluetooth adapter) and python-OBD.** No Arduino or wiring needed on the Honda. Everything outside `yf/` (and the `yf-scan` skill) is upstream's Jeep scanner, unchanged: [MZULALI/xj-scanner](https://github.com/MZULALI/xj-scanner).
 
 ---
 

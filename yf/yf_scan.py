@@ -1,5 +1,7 @@
 """YF Scan: read and log a 2009-2015 Honda Pilot (YF3/YF4) through an ELM327 adapter.
 
+Built around the ELM327 v1.5 BLE mini (elm.REFERENCE; ours is a ViaBecs). Other ELM327s work too.
+
 Standard OBD2 only (python-OBD). Read-only except --clear-codes, which asks first.
 
     python3 yf/yf_scan.py --port DEMO --codes      simulated Pilot, to check the laptop side works
@@ -11,7 +13,11 @@ Standard OBD2 only (python-OBD). Read-only except --clear-codes, which asks firs
     python3 yf/yf_scan.py --honda-probe            try the candidate Honda reads (ATF temp, VCM), raw bytes
     python3 yf/yf_scan.py --honda                  log a drive with the Honda candidates added
 
---port defaults to auto (python-OBD scans serial ports). Give a path like /dev/ttyUSB0 to skip the scan.
+    python3 yf/yf_scan.py --adapters               list adapters on every transport (USB, Bluetooth, BLE)
+    python3 yf/yf_scan.py --port ble --adapter-info   what the adapter says it is, and how it's connected
+
+--port: auto (serial ports, then a BLE scan), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3),
+ble (scan for one BLE adapter), ble:<address>, or socket://<ip>:<port> for a Wi-Fi adapter.
 """
 
 import argparse
@@ -26,6 +32,7 @@ import time
 
 import obd
 
+import elm
 import honda
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
@@ -71,7 +78,7 @@ PIDS = {
 }
 
 SETS = {
-    # Every row, about 1 row/s on a clone. Good default for baseline and longevity logs.
+    # Every row, about 1 row/s on a USB clone (BLE rate not measured yet). Good default for baseline and longevity logs.
     "drive": ["RPM", "SPEED", "ENGINE_LOAD", "THROTTLE_POS", "COOLANT_TEMP", "INTAKE_TEMP",
               "INTAKE_PRESSURE", "MAF", "TIMING_ADVANCE", "SHORT_FUEL_TRIM_1", "LONG_FUEL_TRIM_1",
               "SHORT_FUEL_TRIM_2", "LONG_FUEL_TRIM_2", "O2_S1_WR_CURRENT", "O2_S5_WR_CURRENT",
@@ -86,8 +93,6 @@ LIVE_LINE = ["RPM", "SPEED", "ENGINE_LOAD", "COOLANT_TEMP", "SHORT_FUEL_TRIM_1",
              "SHORT_FUEL_TRIM_2", "LONG_FUEL_TRIM_2", "CONTROL_MODULE_VOLTAGE"]
 
 STATUS_HELP = {
-    obd.OBDStatus.NOT_CONNECTED: "No adapter found. Is it plugged into the laptop? On Linux, is your user in the "
-                                 "'dialout' group (or 'uucp' on some distros)? Try --port /dev/ttyUSB0.",
     obd.OBDStatus.ELM_CONNECTED: "Adapter answers but the car doesn't. Is it pushed fully into the port, key ON?",
     obd.OBDStatus.OBD_CONNECTED: "Adapter sees the bus but the PCM isn't answering. Key ON (or engine running)?",
 }
@@ -113,12 +118,22 @@ def as_cell(name, value):
 
 # --- connection ---------------------------------------------------------------
 
-def open_car(port, timeout, fast, check_voltage=True, protocol=None):
-    if port == "DEMO":
+def open_car(port, timeout, fast, check_voltage=True, protocol=None, adapter_only=False):
+    """Connect through any ELM327 transport (elm/). adapter_only: stop at the adapter, car optional."""
+    if port.upper() == "DEMO":
+        if adapter_only:
+            sys.exit("DEMO has no adapter to describe.")
         return FakeCar(protocol or "6")
-    conn = obd.OBD(None if port == "auto" else port, fast=fast, timeout=timeout,
-                   check_voltage=check_voltage, protocol=protocol)
+    try:
+        ad = elm.connect(port, timeout=timeout, fast=fast, check_voltage=check_voltage, protocol=protocol)
+    except elm.adapter.NotConnected as e:
+        sys.exit(f"No adapter: {e}")
+    conn = ad.conn
+    elm.adapter.show(ad, verbose=adapter_only)
     st = conn.status()
+    if adapter_only:
+        print(f"Car: {st}" + ("" if st == obd.OBDStatus.CAR_CONNECTED else f". {STATUS_HELP.get(st, '')}"))
+        return conn
     if st != obd.OBDStatus.CAR_CONNECTED:
         conn.close()
         sys.exit(f"Not connected ({st}). {STATUS_HELP.get(st, '')}")
@@ -134,6 +149,15 @@ def query(conn, name):
         return None
     r = conn.query(cmd)
     return None if r.is_null() else r.value
+
+
+def show_adapters():
+    print("Looking for adapters (USB and bound Bluetooth ports, then a 6 s BLE scan)...")
+    found = elm.find_adapters()
+    for port, kind, desc in found:
+        print(f"  {kind:18} {('--port ' + port) if port else '':32} {desc}")
+    if not any(p for p, _, _ in found):
+        print("Nothing that looks like an OBD adapter.")
 
 
 # --- codes and readiness --------------------------------------------------------
@@ -291,6 +315,7 @@ class FakeCar:
         self.supported_commands |= {obd.commands[n] for n in ("STATUS", "GET_DTC", "GET_CURRENT_DTC",
                                                               "DISTANCE_SINCE_DTC_CLEAR", "WARMUPS_SINCE_DTC_CLEAR")}
         self.supported_commands |= {obd.commands[f"MONITOR_MISFIRE_CYLINDER_{c}"] for c in range(1, 7)}
+        print(f"Adapter: {elm.REFERENCE['name']} (simulated)")
         print("Connected: DEMO (simulated Pilot, values are made up)")
 
     def supports(self, cmd):
@@ -361,7 +386,11 @@ class FakeCar:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", default="auto", help="auto, DEMO, or a serial path like /dev/ttyUSB0 or /dev/rfcomm0")
+    ap.add_argument("--port", default="auto", help="auto, DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0), "
+                    "ble, ble:<address>, or socket://<ip>:<port>")
+    ap.add_argument("--adapters", action="store_true", help="list adapters on every transport (no connection), exit")
+    ap.add_argument("--adapter-info", action="store_true", help="connect to the adapter only: chip, voltage, "
+                    "link details (BLE: which GATT pipe), then exit. Works with the key off")
     ap.add_argument("--timeout", type=float, default=0.5, help="seconds to wait per reply (clones can be slow)")
     ap.add_argument("--fast", action="store_true", help="python-OBD fast mode; off by default, clones handle it badly")
     ap.add_argument("--no-voltage-check", action="store_true", help="skip the adapter's battery-voltage check "
@@ -380,9 +409,14 @@ def main():
     ap.add_argument("--tag", help="word added to the log filename, e.g. baseline or after-plugs")
     args = ap.parse_args()
 
-    conn = open_car(args.port, args.timeout, args.fast, not args.no_voltage_check, args.protocol)
+    if args.adapters:
+        show_adapters()
+        return
+    conn = open_car(args.port, args.timeout, args.fast, not args.no_voltage_check, args.protocol, args.adapter_info)
     try:
-        if args.clear_codes:
+        if args.adapter_info:
+            pass
+        elif args.clear_codes:
             clear_codes(conn)
         elif args.codes:
             show_codes(conn)

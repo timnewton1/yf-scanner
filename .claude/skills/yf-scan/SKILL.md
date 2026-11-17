@@ -1,6 +1,6 @@
 ---
 name: yf-scan
-description: Connect an ELM327 adapter to a 2009-2015 Honda Pilot, read codes, readiness and misfire counters, log drives with noise markers, and summarize what the logs show. Use for the Honda Pilot side of this repo (yf/), not the Jeep.
+description: Connect an ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini) to a 2009-2015 Honda Pilot, read codes, readiness and misfire counters, log drives with noise markers, and summarize what the logs show. Use for the Honda Pilot side of this repo (yf/), not the Jeep.
 ---
 
 # Read the Pilot
@@ -11,9 +11,10 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 
 1. `python3 -m venv .venv && .venv/bin/pip install -r yf/requirements.txt`
 2. `.venv/bin/python yf/yf_scan.py --port DEMO --codes`. This must work before the car is involved.
-3. Adapter into the laptop, then into the OBD port under the dash, key ON.
-4. `.venv/bin/python yf/yf_scan.py --codes`. If it won't connect, use the "Connecting" table in the README, one change at a time.
-5. Then `--supported`, `--misfires`, and `--protocol 7 --honda-probe` (Honda reads answered on 29-bit addressing for owners; if `--protocol 7` won't connect at all, report that and fall back to plain `--honda-probe`). Save the output: it's the first real data on what this car answers. Record it in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md) and the README's PID notes.
+3. Adapter into the OBD port under the dash. The repo assumes an **ELM327 v1.5 BLE mini** (ours is a ViaBecs OBD-HT): Bluetooth LE, no pairing. Close any phone app connected to it first; it takes one connection at a time.
+4. `.venv/bin/python yf/yf_scan.py --adapters`, then `--port <what it showed> --adapter-info` (key off is fine). Check the `type:` it prints. If it isn't `ELM327 v1.5 BLE mini`, tell them, and read the `note:` line for what that changes. First time with the ViaBecs: follow the first-contact list in [yf/docs/adapters.md](../../../yf/docs/adapters.md) and record what it reports there.
+5. Key ON. `.venv/bin/python yf/yf_scan.py --port <port> --codes`. If it won't connect, use the "Connecting" table in the README, one change at a time. Pass the same `--port` to every command after this.
+6. Then `--supported`, `--misfires`, and `--protocol 7 --honda-probe` (Honda reads answered on 29-bit addressing for owners; if `--protocol 7` won't connect at all, report that and fall back to plain `--honda-probe`). Save the output: it's the first real data on what this car answers. Record it in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md) and the README's PID notes.
 
 ## Common asks
 

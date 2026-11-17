@@ -27,6 +27,7 @@ Failures:
 - Constant −40 / −41.8 (a zero byte: wrong address or no data). One owner fixed it by switching from a cheap adapter to a BAFX.
 - **Cheap clones answering the wrong request:** a 2014 Ridgeline owner's clone returned the `2200` packet for `2201`, but was fine on standard PIDs. A VGate iCar Pro worked. The probe checks the `62 22 01` echo, so this shows up as "answered the wrong request".
 - Adapters reported working: Veepeak, VGate iCar Pro / Icar2, OBDLink MX, BAFX, Foseal WiFi. Failed or suspect: cheap Wish clones, Kobra.
+- The repo's adapter type, the ELM327 v1.5 BLE mini ([adapters.md](adapters.md)): no Honda reports either way. If `--honda-probe` shows it answering the wrong request, a known-good adapter from the list above is the fallback; `elm/` handles any of them.
 - OBD Fusion owners disagree on header: "ECM" worked for one; several others needed it blank.
 
 Nobody quotes the service manual on the ATF sensor. One poster (no source): thermistor on a 5 V reference, 0.5–4.5 V normal, an open circuit reads −40. Sensor location is unknown. Cross-check against a thermocouple on the cooler line before trusting absolute numbers.
