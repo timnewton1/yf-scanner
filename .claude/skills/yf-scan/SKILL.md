@@ -25,7 +25,7 @@ The scanner is `scan.py`, run from the repo root with the venv's Python. Read [R
 |---|---|---|
 | "Is it OK?" / "Check it over" | `--report` | Go through each section: codes per module, incomplete monitors, uneven misfire counts, Mode 06 failures, trims, charging voltage, ATF. Say what each can and can't tell |
 | "Any codes?" | `--codes` | Give each code, which module, whether it's stored, pending or permanent, and which readiness monitors are incomplete |
-| "Log my drive" | `--tag <word> --honda`; Ctrl+C at the end | Remind them: Enter = marker, a word first labels it. Passenger works the laptop |
+| "Log my drive" | `--tag <word> --honda`; Ctrl+C at the end | Remind them: Enter = marker, a word first labels it. Passenger works the laptop. `--quick` for faster rows when the slow values every 10-60 s are enough |
 | "Chasing a noise" | `--set noise --honda --tag noise` | Six PIDs in one request, so rows come fast. Ask them to mark every time they hear it, and to try to reproduce it at different gears, speeds and loads, and with VCM on or off (light steady cruise vs. accelerating) |
 | "Summarize that log" | `.venv/bin/python summarize.py logs/<file>.csv` | Then read the CSV yourself for anything the summary doesn't cover |
 | "Misfires?" | `--misfires` | Per-cylinder counts. Uneven counts on one cylinder are worth following up (plug, coil, injector) |

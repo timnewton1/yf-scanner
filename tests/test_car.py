@@ -331,6 +331,18 @@ class TestCli(unittest.TestCase):
             self.assertIn("ATF F (candidate)", rows[0])
             self.assertGreater(len(rows), 5)
 
+    def test_quick_log_is_faster(self):
+        rates = {}
+        for quick in (False, True):
+            with tempfile.TemporaryDirectory() as d:
+                argv = ["--port", "sim://pilot?clean&latency=0.02", "--seconds", "1.5", "--honda", "--log-dir", d]
+                out = run_cli(*argv + (["--quick"] if quick else []))
+                with open(os.path.join(d, os.listdir(d)[0]), encoding="utf-8") as f:
+                    rates[quick] = len(f.read().splitlines()) - 1
+                if quick:
+                    self.assertIn("quick:", out)
+        self.assertGreater(rates[True], 1.8 * rates[False], rates)  # drive + Honda: 5 requests a row vs about 2.5
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ Read-only except --clear-codes, which asks first.
     scan.py --honda-probe              the Honda Mode 22 candidates (ATF temp, VCM), raw bytes
     scan.py                            log a drive to logs/ (Enter = noise marker)
     scan.py --set noise --honda        smaller, faster set for chasing a noise, plus Honda reads
+    scan.py --quick --honda            the drive set, but only the noise values every row (fast)
     scan.py --unattended               Raspberry Pi: log every drive, one file each
 
 --port: auto (the saved adapter, else serial ports, then a BLE scan), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3),
@@ -133,6 +134,8 @@ def main(argv=None):
     ap.add_argument("--set", choices=sorted(logger.SETS), default="drive", help="which PIDs to log (default: drive)")
     ap.add_argument("--pids", help="comma-separated names instead of --set, e.g. RPM,SPEED,COOLANT_TEMP")
     ap.add_argument("--honda", action="store_true", help="when logging, add the Honda candidate reads as columns")
+    ap.add_argument("--quick", action="store_true", help="when logging, read the noise values (and VCM) every row and "
+                    "the rest only every 10-60 s, so rows come several times faster; cells not read are blank")
     ap.add_argument("--seconds", type=float, help="stop logging after this many seconds")
     ap.add_argument("--tag", help="word added to the log filename, e.g. baseline or after-plugs")
     ap.add_argument("--unattended", action="store_true", help="Raspberry Pi mode: wait for the engine, log each "
@@ -160,7 +163,7 @@ def main(argv=None):
     if args.unattended:
         try:
             logger.unattended(opener(args), names, args.honda, args.gpio_button, args.tag or "auto",
-                              directory=args.log_dir)
+                              directory=args.log_dir, quick=args.quick)
         except KeyboardInterrupt:
             pass
         return
@@ -193,7 +196,8 @@ def main(argv=None):
         elif args.query:
             query(car, args.query, args.module)
         else:
-            logger.drive(car, names, args.seconds, args.tag, args.honda, reopen=opener(args), directory=args.log_dir)
+            logger.drive(car, names, args.seconds, args.tag, args.honda, reopen=opener(args), directory=args.log_dir,
+                         quick=args.quick)
             return  # drive() closes the car (it may have reconnected to a new one)
     except ElmError as e:
         sys.exit(f"Lost the adapter: {e}")

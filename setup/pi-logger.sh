@@ -2,7 +2,7 @@
 # Install the unattended drive logger as a systemd service on a Raspberry Pi (or any Linux box
 # that rides in the car). Run setup/setup.sh first.
 #
-#   setup/pi-logger.sh [--gpio-button 17] [--honda] [--set noise] [--port ...]
+#   setup/pi-logger.sh [--gpio-button 17] [--honda] [--quick] [--set noise] [--port ...]
 #   setup/pi-logger.sh --remove
 #
 # The adapter: the one saved in .adapter (connect once with scan.py --adapter-info and it is), or

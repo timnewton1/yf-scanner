@@ -51,6 +51,7 @@ setup/setup.sh                                 # Linux / WSL / Pi: uv, .venv (uv
 # engine running
 .venv/bin/python scan.py --tag baseline        # log a drive; Enter drops a noise marker
 .venv/bin/python scan.py --set noise --honda   # noise hunting: faster rows, plus ATF and VCM
+.venv/bin/python scan.py --quick --honda       # every value, but only the fast ones every row
 .venv/bin/python summarize.py logs/yf_XXXX.csv
 ```
 
@@ -69,6 +70,8 @@ Logs go to `logs/` (git-ignored), one CSV per run, flushed every row. The live l
 **Noise markers:** while logging, press Enter when you hear something, or type a word first (`whine`, `drone`, `clunk`). The summary lines each marker up with rpm, speed, load and the rpm/mph ratio (a gear proxy): a noise that follows rpm is engine side, one that follows road speed is wheels or driveline, one that only shows up at high load points at mounts or exhaust, and one that only shows up with VCM on three cylinders points at VCM.
 
 **Speed:** over BLE each request takes about 0.15 s, and the scanner asks for six PIDs per request (one PID at a time only if the engine computer misses three multi-PID requests in a row). The `drive` set (18 PIDs) is three requests, about 2 rows/s; `noise` (6 PIDs) is one, about 5 rows/s. `--honda` adds two requests per row.
+
+**Quick mode** (`--quick`, a switch in the TUI and the app) works with any set: it reads the `noise` values and VCM every row, and the rest only as often as they're worth: trims, airflow, temperatures and sensors about every 10 s, slow movers (cat temps, EVAP, fuel level) every 60 s, and counters that don't change during a drive once. A row is then one request plus at most one more, so `drive --honda` goes from about 1 row/s to about 3. Cells a row didn't read are blank in the CSV; the screens and the summary timeline show each value's last reading. The periods are `QUICK_EVERY` in `scanner/logger.py`.
 
 ## What this car answers (2011 Pilot, measured)
 
