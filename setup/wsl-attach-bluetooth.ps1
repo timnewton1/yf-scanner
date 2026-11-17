@@ -1,11 +1,11 @@
 # Hand the laptop's Bluetooth radio to WSL2 (usbipd-win), so yf-scanner in WSL can reach a BLE adapter.
 # Windows loses Bluetooth while the radio is attached. Undo with -Detach, or unplug/replug a dongle.
 #
-#   powershell -ExecutionPolicy Bypass -File yf\setup\wsl-attach-bluetooth.ps1
-#   powershell -ExecutionPolicy Bypass -File yf\setup\wsl-attach-bluetooth.ps1 -Detach
+#   powershell -ExecutionPolicy Bypass -File setup\wsl-attach-bluetooth.ps1
+#   powershell -ExecutionPolicy Bypass -File setup\wsl-attach-bluetooth.ps1 -Detach
 #
-# Then, in WSL: yf/setup/setup.sh   (BlueZ, LE-only mode, venv)
-# Prefer not to give up Windows Bluetooth? Run the scanner on Windows instead: yf\setup\windows.ps1
+# Then, in WSL: setup/setup.sh   (BlueZ, LE-only mode, venv)
+# Prefer not to give up Windows Bluetooth? Run the scanner on Windows instead: setup\windows.ps1
 param([switch]$Detach, [string]$BusId)
 $ErrorActionPreference = 'Stop'
 
@@ -31,7 +31,7 @@ if (-not $BusId) {
     $line = $list | Where-Object { $_ -match '^\s*\d+-[\d.]+\s' -and $_ -match 'Bluetooth' } | Select-Object -First 1
     if (-not $line) {
         $list | Write-Host
-        Write-Warning 'No USB Bluetooth device listed. A built-in radio not on USB can''t be passed to WSL; use a USB dongle or yf\setup\windows.ps1.'
+        Write-Warning 'No USB Bluetooth device listed. A built-in radio not on USB can''t be passed to WSL; use a USB dongle or setup\windows.ps1.'
         Read-Host 'Enter to close'; exit 1
     }
     $BusId = ($line.Trim() -split '\s+')[0]
@@ -47,6 +47,6 @@ if ($Detach) {
     & $usbipd attach --wsl --busid $BusId
     Start-Sleep -Seconds 3
     & $usbipd list | Write-Host
-    Write-Host "`nAttached $BusId to WSL. In WSL run: yf/setup/setup.sh"
+    Write-Host "`nAttached $BusId to WSL. In WSL run: setup/setup.sh"
 }
 Read-Host 'Enter to close'

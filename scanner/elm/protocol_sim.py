@@ -18,8 +18,8 @@ from serial.serialutil import PortNotOpenError, SerialBase, SerialException
 
 class Serial(SerialBase):
     def open(self):
-        from sim.elm import ElmEmulator
-        from sim.pilot import Pilot
+        from ..sim.elm import ElmEmulator
+        from ..sim.pilot import Pilot
 
         if self.is_open:
             raise SerialException("Port is already open.")

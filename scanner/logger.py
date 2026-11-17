@@ -12,13 +12,13 @@ import sys
 import threading
 import time
 
-import honda
-from car import ElmError
-from elm import NotConnected
-from elm.session import NoPrompt
-from obd2 import pids
+from . import honda
+from .car import ElmError
+from .elm import NotConnected
+from .elm.session import NoPrompt
+from .obd2 import pids
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+LOG_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs"))
 
 SETS = {
     # Three requests a row on the Pilot: about 2 rows/s over BLE. Baseline and longevity logs.

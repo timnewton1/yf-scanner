@@ -1,7 +1,7 @@
-"""Summarize a yf_scan CSV: a timeline, warm-up, charging, fuel trims by driving condition (coasting
+"""Summarize a scan.py CSV: a timeline, warm-up, charging, fuel trims by driving condition (coasting
 apart), how the long-term trims moved, and every noise marker.
 
-    python3 yf/tools/summarize.py yf/logs/yf_XXXX.csv [marker_window_seconds] [timeline_step_seconds]
+    python3 summarize.py logs/yf_XXXX.csv [marker_window_seconds] [timeline_step_seconds]
 
 The trim thresholds printed are common rules of thumb, not Honda specs.
 """

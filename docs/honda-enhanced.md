@@ -37,7 +37,7 @@ Codes: Mode `03`, `07` and `0A` to both modules → `43 00`, `47 00`, `4A 00`: n
 | VCM active cylinders | `22 2615` | `11` ECM (`ATSH DA11F1`) | `AY` | byte 51 after `62 26 15` | **answers on our 2011**, reads 6 at idle; cruise not yet seen |
 | ECT 1 / 2 | `01 67` | | `B-40` / `C-40` | standard PID 0x67 | not supported on our 2011 (PID 67 not in the mask) |
 
-`yf_scan.py --honda-probe` sends each to its module and prints the raw bytes. `--honda` adds both as log columns.
+`scan.py --honda-probe` sends each to its module and prints the raw bytes. `--honda` adds both as log columns.
 
 ### What owners reported (Piloteers, owner posts, unverified)
 

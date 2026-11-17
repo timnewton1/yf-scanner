@@ -1,7 +1,7 @@
 """The transports, end to end through the real session and car layer: a simulated BLE adapter
 and a pty standing in for a USB one, both with the simulated Pilot behind them. No radio needed.
 
-    .venv/bin/python -m unittest discover -s yf/tests -v
+    .venv/bin/python -m unittest discover -s tests -v
 """
 
 import asyncio
@@ -14,11 +14,11 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ["YF_ADAPTER_FILE"] = os.path.join(tempfile.mkdtemp(), ".adapter")  # never the repo's own .adapter
 
-import elm  # noqa: E402
-from car import Car  # noqa: E402
-from elm import ble  # noqa: E402
-from sim.elm import ElmEmulator  # noqa: E402
-from sim.pilot import Pilot  # noqa: E402
+from scanner import elm  # noqa: E402
+from scanner.car import Car  # noqa: E402
+from scanner.elm import ble  # noqa: E402
+from scanner.sim.elm import ElmEmulator  # noqa: E402
+from scanner.sim.pilot import Pilot  # noqa: E402
 
 
 def ElmSim():

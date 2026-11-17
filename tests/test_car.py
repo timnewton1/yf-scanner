@@ -11,14 +11,12 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ["YF_ADAPTER_FILE"] = os.path.join(tempfile.mkdtemp(), ".adapter")  # never the repo's own .adapter
 
-import elm  # noqa: E402
-import honda  # noqa: E402
-import logger  # noqa: E402
-import yf_scan  # noqa: E402
-from car import Car  # noqa: E402
-from elm.session import Elm  # noqa: E402
-from sim.elm import ElmEmulator  # noqa: E402
-from sim.pilot import Pilot  # noqa: E402
+import scan  # noqa: E402
+from scanner import elm, honda, logger  # noqa: E402
+from scanner.car import Car  # noqa: E402
+from scanner.elm.session import Elm  # noqa: E402
+from scanner.sim.elm import ElmEmulator  # noqa: E402
+from scanner.sim.pilot import Pilot  # noqa: E402
 
 CLEAN = "sim://pilot?clean&latency=0"
 DEMO = "sim://pilot?latency=0"
@@ -172,7 +170,7 @@ def run_cli(*argv):
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         try:
-            yf_scan.main(list(argv))
+            scan.main(list(argv))
         except SystemExit as e:
             if e.code not in (None, 0):
                 out.write(f"\nEXIT {e.code}")

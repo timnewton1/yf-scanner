@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Set up yf-scanner on Linux, WSL2 or a Raspberry Pi: Python venv, requirements, Bluetooth.
 #
-#   yf/setup/setup.sh            venv + requirements + BlueZ running
-#   yf/setup/setup.sh --le-only  also switch BlueZ to Bluetooth LE only (fixes "BREDR ProfileUnavailable"
-#                                with LE-only adapters; turns off classic Bluetooth on this machine)
+#   setup/setup.sh            venv + requirements + BlueZ running
+#   setup/setup.sh --le-only  also switch BlueZ to Bluetooth LE only (fixes "BREDR ProfileUnavailable"
+#                             with LE-only adapters; turns off classic Bluetooth on this machine)
 #
 # On WSL, --le-only is the default (WSL has no other Bluetooth users), and the radio must first be
-# handed to WSL from Windows: yf/setup/wsl-attach-bluetooth.ps1.
+# handed to WSL from Windows: setup/wsl-attach-bluetooth.ps1.
 set -euo pipefail
 
-repo="$(cd "$(dirname "$0")/../.." && pwd)"
+repo="$(cd "$(dirname "$0")/.." && pwd)"
 le_only=0
 is_wsl=0
 grep -qi microsoft /proc/version 2>/dev/null && is_wsl=1
@@ -35,11 +35,11 @@ if [ ! -x "$repo/.venv/bin/python" ]; then
   python3 -m venv "$repo/.venv"
 fi
 "$repo/.venv/bin/pip" install -q --upgrade pip
-"$repo/.venv/bin/pip" install -q -r "$repo/yf/requirements.txt"
+"$repo/.venv/bin/pip" install -q -r "$repo/requirements.txt"
 if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
   "$repo/.venv/bin/pip" install -q gpiozero lgpio || echo "(gpiozero not installed; the marker button won't work)"
 fi
-"$repo/.venv/bin/python" "$repo/yf/yf_scan.py" --port DEMO --codes >/dev/null && echo "venv OK, DEMO runs"
+"$repo/.venv/bin/python" "$repo/scan.py" --port DEMO --codes >/dev/null && echo "venv OK, DEMO runs"
 
 say "Bluetooth (BlueZ)"
 if ! command -v bluetoothctl >/dev/null; then
@@ -74,9 +74,9 @@ elif bluetoothctl list 2>/dev/null | grep -q Controller; then
 else
   echo "No Bluetooth radio visible."
   if [ "$is_wsl" = 1 ]; then
-    echo "WSL: run yf/setup/wsl-attach-bluetooth.ps1 in Windows first (it hands the radio to WSL), then this again."
+    echo "WSL: run setup/wsl-attach-bluetooth.ps1 in Windows first (it hands the radio to WSL), then this again."
   fi
   exit 1
 fi
 echo
-echo "Next: $repo/.venv/bin/python $repo/yf/yf_scan.py --adapters"
+echo "Next: $repo/.venv/bin/python $repo/scan.py --adapters"

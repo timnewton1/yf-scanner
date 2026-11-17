@@ -3,20 +3,20 @@
 Built around the ELM327 v1.5 BLE mini (elm.REFERENCE; ours is a ViaBecs). Other ELM327s work too.
 Read-only except --clear-codes, which asks first.
 
-    yf_scan.py --port DEMO --report       simulated Pilot, to check the laptop side works
-    yf_scan.py --adapters                 list adapters on every transport (USB, Bluetooth, BLE)
-    yf_scan.py --adapter-info             what the adapter says it is, and how it's connected
-    yf_scan.py --report                   health check: codes in every module, readiness, misfires,
+    scan.py --port DEMO --report       simulated Pilot, to check the laptop side works
+    scan.py --adapters                 list adapters on every transport (USB, Bluetooth, BLE)
+    scan.py --adapter-info             what the adapter says it is, and how it's connected
+    scan.py --report                   health check: codes in every module, readiness, misfires,
                                           Mode 06 results that failed, live values, Honda reads
-    yf_scan.py --codes                    check engine light, stored / pending / permanent codes, readiness
-    yf_scan.py --misfires                 Mode 06 misfire counters per cylinder
-    yf_scan.py --monitors                 every Mode 06 test result with its limits
-    yf_scan.py --supported                every Mode 01 PID each module answers
-    yf_scan.py --info                     VIN, module names, calibration IDs
-    yf_scan.py --honda-probe              the Honda Mode 22 candidates (ATF temp, VCM), raw bytes
-    yf_scan.py                            log a drive to yf/logs/ (Enter = noise marker)
-    yf_scan.py --set noise --honda        smaller, faster set for chasing a noise, plus Honda reads
-    yf_scan.py --unattended               Raspberry Pi: log every drive, one file each
+    scan.py --codes                    check engine light, stored / pending / permanent codes, readiness
+    scan.py --misfires                 Mode 06 misfire counters per cylinder
+    scan.py --monitors                 every Mode 06 test result with its limits
+    scan.py --supported                every Mode 01 PID each module answers
+    scan.py --info                     VIN, module names, calibration IDs
+    scan.py --honda-probe              the Honda Mode 22 candidates (ATF temp, VCM), raw bytes
+    scan.py                            log a drive to logs/ (Enter = noise marker)
+    scan.py --set noise --honda        smaller, faster set for chasing a noise, plus Honda reads
+    scan.py --unattended               Raspberry Pi: log every drive, one file each
 
 --port: auto (the saved adapter, else serial ports, then a BLE scan), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3),
 ble (scan for one BLE adapter), ble:<address>, or socket://<ip>:<port> for a Wi-Fi adapter.
@@ -26,12 +26,10 @@ The first adapter that answers is saved in .adapter (gitignored), so after that 
 import argparse
 import sys
 
-import elm
-import honda
-import logger
-from car import READ_ONLY_SERVICES, Car, ElmError
-from elm.session import nrc_text
-from obd2 import dtc, monitors, pids
+from scanner import elm, honda, logger
+from scanner.car import READ_ONLY_SERVICES, Car, ElmError
+from scanner.elm.session import nrc_text
+from scanner.obd2 import dtc, monitors, pids
 
 
 # --- connection -----------------------------------------------------------------
@@ -306,7 +304,7 @@ def main(argv=None):
     ap.add_argument("--unattended", action="store_true", help="Raspberry Pi mode: wait for the engine, log each "
                     "drive to its own file, repeat forever")
     ap.add_argument("--gpio-button", type=int, metavar="PIN", help="with --unattended: GPIO pin of a marker button")
-    ap.add_argument("--log-dir", help="where logs go (default yf/logs)")
+    ap.add_argument("--log-dir", help="where logs go (default logs)")
     args = ap.parse_args(argv)
 
     if args.forget_adapter:

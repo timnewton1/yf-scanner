@@ -12,7 +12,7 @@ Everything else gets the refusal the real modules give (7F 22 31 for an unknown 
 import math
 import time
 
-from obd2 import pids as P
+from ..obd2 import pids as P
 
 ECM, TCM = 0x11, 0x1D
 

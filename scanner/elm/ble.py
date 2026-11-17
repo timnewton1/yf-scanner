@@ -68,20 +68,20 @@ def hint(err=""):
     e = str(err)
     if "BREDR" in e or "ProfileUnavailable" in e or "br-connection" in e:
         return ("BlueZ tried classic Bluetooth on an LE-only adapter. Set 'ControllerMode = le' in "
-                "/etc/bluetooth/main.conf and restart bluetooth (yf/setup/wsl-bluetooth.sh does this)")
+                "/etc/bluetooth/main.conf and restart bluetooth (setup/setup.sh --le-only does this)")
     if sys.platform == "win32":
         return "Is Bluetooth on (Settings > Bluetooth & devices)? Close any phone app connected to the adapter"
     if sys.platform == "darwin":
         return "Is Bluetooth on, and has the terminal been allowed to use it (System Settings > Privacy)?"
     if "org.bluez" in e or "ServiceUnknown" in e:
         return ("BlueZ isn't running or there's no radio. Linux: sudo systemctl start bluetooth. "
-                "WSL: attach the radio with usbipd first (yf/setup/wsl-attach-bluetooth.ps1)")
+                "WSL: attach the radio with usbipd first (setup/wsl-attach-bluetooth.ps1)")
     return "Is Bluetooth on (sudo systemctl start bluetooth)? Close any phone app connected to the adapter"
 
 
 def require_bleak():
     if BleakClient is None:
-        raise LinkError("BLE needs the 'bleak' package: .venv/bin/pip install -r yf/requirements.txt")
+        raise LinkError("BLE needs the 'bleak' package: .venv/bin/pip install -r requirements.txt")
 
 
 class Channel:

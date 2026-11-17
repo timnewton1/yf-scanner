@@ -2,7 +2,7 @@
 
 The repo is built around one adapter type, the **ELM327 v1.5 BLE mini** (below). When a doc or a tool says "the adapter", it means that type. Other ELM327s and transports work through the same code, and the tool says when it sees something else.
 
-`yf/elm/` is the only code that knows how the adapter reaches the computer. `session.py` speaks the ELM327's command language over any pyserial-style port; adding a transport means adding a pyserial URL handler, nothing else.
+`scanner/elm/` is the only code that knows how the adapter reaches the computer. `session.py` speaks the ELM327's command language over any pyserial-style port; adding a transport means adding a pyserial URL handler, nothing else.
 
 | Adapter | `--port` | Transport | Notes |
 |---|---|---|---|
@@ -16,8 +16,8 @@ The repo is built around one adapter type, the **ELM327 v1.5 BLE mini** (below).
 Two commands work the same on every transport:
 
 ```sh
-.venv/bin/python yf/yf_scan.py --adapters                    # list what's plugged in or in range; opens nothing
-.venv/bin/python yf/yf_scan.py --port <port> --adapter-info  # the chip, its voltage reading, and the link (key off is fine)
+.venv/bin/python scan.py --adapters                    # list what's plugged in or in range; opens nothing
+.venv/bin/python scan.py --port <port> --adapter-info  # the chip, its voltage reading, and the link (key off is fine)
 ```
 
 Every connection prints one `Adapter:` line ending in `type:`, measured against the reference type (`classify()` in `elm/adapter.py`):
@@ -100,7 +100,7 @@ Writes use "without response" when the characteristic allows it, as phone apps d
 ## Tests
 
 ```sh
-.venv/bin/python -m unittest discover -s yf/tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
 - `test_decode.py`: the reply parser and decoders against replies captured from the real car (`tests/fixtures/pilot_2011.py`), including one with a dropped frame.

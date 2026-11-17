@@ -6,11 +6,10 @@ only used to find them, because the reference adapter returns just one reply to 
 two modules answer (see elm/session.py).
 """
 
-import elm
-import honda
-from elm.session import ElmError, LinkLost  # noqa: F401  (re-exported for callers)
-from obd2 import dtc, monitors, pids
-from obd2.status import Status
+from . import elm, honda
+from .elm.session import ElmError, LinkLost  # noqa: F401  (re-exported for callers)
+from .obd2 import dtc, monitors, pids
+from .obd2.status import Status
 
 MAX_PIDS_PER_REQUEST = 6  # ISO 15765-4 allows up to 6 PIDs in one Mode 01 request
 

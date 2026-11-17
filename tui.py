@@ -1,8 +1,8 @@
 """YF TUI: the whole scanner in one terminal screen, from finding the adapter to summarizing a drive log.
 
-    .venv/bin/python yf/tui.py --port DEMO          simulated Pilot (prove the laptop side first)
-    .venv/bin/python yf/tui.py --connect            the real car, key ON: the saved adapter (.adapter), once
-                                                    one has connected; before that, --port auto finds it
+    .venv/bin/python tui.py --port DEMO          simulated Pilot (prove the laptop side first)
+    .venv/bin/python tui.py --connect            the real car, key ON: the saved adapter (.adapter), once
+                                                 one has connected; before that, --port auto finds it
 
 Tabs (keys 1-7):
     1 Connect   find adapters, connect, what the adapter says it is, which modules answer
@@ -12,9 +12,9 @@ Tabs (keys 1-7):
     4 Mode 06   every Mode 06 test result with its limits
     5 Info      VIN, module names, calibration IDs, supported PIDs
     6 Console   one read-only request (services 01 02 03 06 07 09 0A 22) to one module; raw adapter traffic
-    7 Logs      the CSVs in yf/logs and their summaries
+    7 Logs      the CSVs in logs/ and their summaries
 
-Read-only except "Clear codes", same as yf_scan.py. Needs textual (pip install -r yf/requirements.txt).
+Read-only except "Clear codes", same as scan.py. Needs textual (pip install -r requirements.txt).
 """
 
 import argparse
@@ -35,14 +35,12 @@ from textual.screen import ModalScreen
 from textual.widgets import (Button, DataTable, Footer, Header, Input, Label, RichLog, Select, Sparkline, Static,
                              Switch, TabbedContent, TabPane)
 
-import elm
-import honda
-import logger
-from car import READ_ONLY_SERVICES, Car
-from elm import NotConnected
-from elm.session import nrc_text
-from obd2 import dtc, monitors, pids
-from yf_scan import REPORT_LIVE, fmt
+from scanner import elm, honda, logger
+from scanner.car import READ_ONLY_SERVICES, Car
+from scanner.elm import NotConnected
+from scanner.elm.session import nrc_text
+from scanner.obd2 import dtc, monitors, pids
+from scan import REPORT_LIVE, fmt
 
 SPARKS = [("RPM", "rpm"), ("SPEED", "mph"), ("COOLANT_TEMP", "coolant F"), ("ENGINE_LOAD", "load %")]
 HISTORY = 120  # rows of sparkline history
@@ -108,7 +106,7 @@ class LockedLogger(logger.Logger):
 # --- dialogs ----------------------------------------------------------------------
 
 class ClearCodes(ModalScreen[bool]):
-    """Type 'clear' to go ahead, same as yf_scan.py --clear-codes."""
+    """Type 'clear' to go ahead, same as scan.py --clear-codes."""
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -861,7 +859,7 @@ class YfTui(App):
 
     @work(thread=True, exclusive=True, group="summary")
     def summarize(self, path):
-        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools", "summarize.py")
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "summarize.py")
         try:
             r = subprocess.run([sys.executable, script, path], capture_output=True, text=True, timeout=60)
             text = r.stdout + (f"\n{r.stderr}" if r.returncode else "")
@@ -889,7 +887,7 @@ def main(argv=None):
     ap.add_argument("--timeout", type=float, default=1.0, help="seconds to wait per reply (default 1.0)")
     ap.add_argument("--baud", type=int, help="USB/serial adapters: skip the baud-rate probe")
     ap.add_argument("--protocol", help="force the ELM327 protocol (the Pilot needs none: it auto-detects 7)")
-    ap.add_argument("--log-dir", help="where logs go (default yf/logs)")
+    ap.add_argument("--log-dir", help="where logs go (default logs)")
     ap.add_argument("--connect", action="store_true", help="connect on start")
     a = ap.parse_args(argv)
     YfTui(a.port or elm.saved() or "DEMO", a.timeout, a.protocol, a.baud, a.log_dir, connect=a.connect).run()

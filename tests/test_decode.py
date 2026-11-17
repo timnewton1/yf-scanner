@@ -1,6 +1,6 @@
 """The session's reply parser and the OBD2 decoders, against replies captured from the real car.
 
-    .venv/bin/python -m unittest discover -s yf/tests -v
+    .venv/bin/python -m unittest discover -s tests -v
 """
 
 import os
@@ -10,11 +10,11 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import honda  # noqa: E402
-from elm.session import Elm  # noqa: E402
 from fixtures import pilot_2011 as F  # noqa: E402
-from obd2 import dtc, monitors, pids  # noqa: E402
-from obd2.status import Status  # noqa: E402
+from scanner import honda  # noqa: E402
+from scanner.elm.session import Elm  # noqa: E402
+from scanner.obd2 import dtc, monitors, pids  # noqa: E402
+from scanner.obd2.status import Status  # noqa: E402
 
 
 def parser(protocol="7"):

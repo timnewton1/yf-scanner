@@ -5,19 +5,19 @@ description: Connect an ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini
 
 # Read the Pilot
 
-The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. Read [yf/README.md](../../../yf/README.md) first. The person may be new to this: say what a thing is the first time you name it, and wait for them to report what they see. For multi-step setup, hand them a script from `yf/setup/` (or write one there) rather than a list of commands.
+The scanner is `scan.py`, run from the repo root with the venv's Python. Read [README.md](../../../README.md) first. The person may be new to this: say what a thing is the first time you name it, and wait for them to report what they see. For multi-step setup, hand them a script from `setup/` (or write one there) rather than a list of commands.
 
 ## First time
 
-1. Set up the computer, per [yf/docs/platforms.md](../../../yf/docs/platforms.md):
-   - Linux or Raspberry Pi: `yf/setup/setup.sh`.
-   - WSL2: in Windows, `yf\setup\wsl-attach-bluetooth.ps1` (it takes Bluetooth away from Windows while attached). Then `yf/setup/setup.sh` in WSL.
-   - Windows native: `yf\setup\windows.ps1 <args>` does setup and runs the scanner.
-2. `.venv/bin/python yf/yf_scan.py --port DEMO --report`. This must work before the car is involved.
+1. Set up the computer, per [docs/platforms.md](../../../docs/platforms.md):
+   - Linux or Raspberry Pi: `setup/setup.sh`.
+   - WSL2: in Windows, `setup\wsl-attach-bluetooth.ps1` (it takes Bluetooth away from Windows while attached). Then `setup/setup.sh` in WSL.
+   - Windows native: `setup\windows.ps1 <args>` does setup and runs the scanner.
+2. `.venv/bin/python scan.py --port DEMO --report`. This must work before the car is involved.
 3. Adapter into the OBD port under the dash. Close any phone app connected to it first; it takes one connection at a time.
 4. `--adapter-info` (key off is fine). It finds the adapter and saves it in `.adapter` (git-ignored), so no command after this needs `--port`. If it says several are in range, `--adapters`, then `--port ble:<address> --adapter-info` once. Check the `type:` it prints. If it isn't `ELM327 v1.5 BLE mini`, tell them, and read the `note:` lines for what that changes.
 5. Key ON (engine off is fine): `--report`. If it won't connect, use the "Connecting" table in the README, one change at a time. Don't force `--protocol`: the Pilot only answers 29-bit CAN, and auto-detect finds it.
-6. If this car isn't the 2011 already recorded, save `--report`, `--supported`, `--info` (leave the VIN out of the repo) and `--honda-probe`. Record what differs in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md).
+6. If this car isn't the 2011 already recorded, save `--report`, `--supported`, `--info` (leave the VIN out of the repo) and `--honda-probe`. Record what differs in [docs/honda-enhanced.md](../../../docs/honda-enhanced.md).
 
 ## Common asks
 
@@ -27,10 +27,10 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 | "Any codes?" | `--codes` | Give each code, which module, whether it's stored, pending or permanent, and which readiness monitors are incomplete |
 | "Log my drive" | `--tag <word> --honda`; Ctrl+C at the end | Remind them: Enter = marker, a word first labels it. Passenger works the laptop |
 | "Chasing a noise" | `--set noise --honda --tag noise` | Six PIDs in one request, so rows come fast. Ask them to mark every time they hear it, and to try to reproduce it at different gears, speeds and loads, and with VCM on or off (light steady cruise vs. accelerating) |
-| "Summarize that log" | `.venv/bin/python yf/tools/summarize.py yf/logs/<file>.csv` | Then read the CSV yourself for anything the summary doesn't cover |
+| "Summarize that log" | `.venv/bin/python summarize.py logs/<file>.csv` | Then read the CSV yourself for anything the summary doesn't cover |
 | "Misfires?" | `--misfires` | Per-cylinder counts. Uneven counts on one cylinder are worth following up (plug, coil, injector) |
 | "Transmission temp?" | `--honda-probe`, or log with `--honda` | ATF is a candidate decode: plausible on the 2011, not cross-checked |
-| "Log every drive" (Pi) | `yf/setup/pi-logger.sh --honda` (after one `--adapter-info` on the Pi saves the adapter) | See the Pi section of platforms.md: power, clock, the marker button |
+| "Log every drive" (Pi) | `setup/pi-logger.sh --honda` (after one `--adapter-info` on the Pi saves the adapter) | See the Pi section of platforms.md: power, clock, the marker button |
 | Something odd on the link | add `--raw` | Every line to and from the adapter. The log's last line counts retries and timeouts |
 
 ## Reading the numbers honestly
@@ -44,4 +44,4 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 ## Things that change the car: ask first
 
 - `--clear-codes` resets readiness monitors and fuel trims. Ask, and remind them about emissions testing, before running it.
-- Nothing in this repo runs actuator tests or writes to a module. `--query` refuses non-read services. Don't improvise Honda commands. Follow the sniff-and-replay rules in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md).
+- Nothing in this repo runs actuator tests or writes to a module. `--query` refuses non-read services. Don't improvise Honda commands. Follow the sniff-and-replay rules in [docs/honda-enhanced.md](../../../docs/honda-enhanced.md).

@@ -1,4 +1,4 @@
 pyserial>=3.5
-textual>=1.0  # yf/tui.py only; the command line works without it
+textual>=1.0  # tui.py only; the command line works without it
 bleak>=0.22  # BLE adapters only; USB, rfcomm, Wi-Fi and DEMO work without it
 # Raspberry Pi marker button (--gpio-button) only:  pip install gpiozero
