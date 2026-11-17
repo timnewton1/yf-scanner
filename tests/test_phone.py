@@ -39,7 +39,20 @@ class FakeLink:
         self.port.close()
 
     def info(self):
-        return ["BLE device AA:BB:CC:DD:EE:01 (OBDII)", "channel FFF0"]
+        return JavaList(["BLE device AA:BB:CC:DD:EE:01 (OBDII)", "channel FFF0"])
+
+
+class JavaList:
+    """What a Kotlin List is in Chaquopy: a java.util.ArrayList with toArray(), not a Python iterable."""
+
+    def __init__(self, items):
+        self._items = items
+
+    def toArray(self):
+        return list(self._items)
+
+    def __iter__(self):
+        raise TypeError("'ArrayList' object is not iterable")
 
 
 class Hooks:

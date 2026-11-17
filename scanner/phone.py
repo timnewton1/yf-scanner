@@ -85,7 +85,10 @@ class LinkPort:
             pass
 
     def info(self):
-        return [str(x) for x in self.link.info()]
+        lines = self.link.info()  # a Kotlin List arrives as a java.util.ArrayList, which Python can't iterate
+        if hasattr(lines, "toArray"):
+            lines = lines.toArray()
+        return [str(x) for x in lines]
 
 
 class Stopped(Exception):
