@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher foreground: a sine wave crossed by an open-ended wrench, white strokes.
+     Traced by hand from the "wrench-wave" concept; the art stays inside the 66dp safe circle. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M30,40 L78,40 L72,68 L36,68 Z" />
-    <path android:fillColor="#1F3A5F"
-        android:pathData="M38,46h4v4h-4z M46,46h4v4h-4z M54,46h4v4h-4z M62,46h4v4h-4z M70,46h-0v4h0z M41,56h4v4h-4z M49,56h4v4h-4z M57,56h4v4h-4z M65,56h4v4h-4z" />
+    <path
+        android:strokeColor="#FFFFFF" android:strokeWidth="2.4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M28.5,54 L33.5,54 C36.5,44 39.5,35.5 43,35.5 C47,35.5 50.5,45 54,54 C57.5,63 61,72.5 65,72.5 C68.5,72.5 71.5,64 74.5,54 L79.5,54" />
+    <group android:translateX="54" android:translateY="54" android:rotation="-45">
+        <path
+            android:strokeColor="#FFFFFF" android:strokeWidth="2.4"
+            android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M11.7,-3.4 A9.9,9.9 0 0,1 30.14,-3.8 L23.6,-3.8 L21.2,0 L23.6,3.8 L30.14,3.8 A9.9,9.9 0 0,1 11.7,3.4 L-11.7,3.4 A9.9,9.9 0 0,1 -30.14,3.8 L-23.6,3.8 L-21.2,0 L-23.6,-3.8 L-30.14,-3.8 A9.9,9.9 0 0,1 -11.7,-3.4 Z" />
+    </group>
 </vector>
