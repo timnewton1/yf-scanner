@@ -39,7 +39,7 @@ Windows without WSL: `powershell -ExecutionPolicy Bypass -File setup\windows.ps1
 
 - Dependencies live in `pyproject.toml` and `uv.lock`, managed by [uv](https://docs.astral.sh/uv/): `uv add <pkg>` to add one, `uv sync` to update `.venv`. Commit `uv.lock` with the change. `uv run python ...` works anywhere `.venv/bin/python ...` does.
 
-- `android/` is the phone app. It runs this repo's Python on the phone (Chaquopy): `scanner/phone.py` is its entry point, and Kotlin holds only the BLE link, the screens and the logging service. There's no second copy of the scanner to keep in step. See [android/README.md](android/README.md).
+- `android/` is the phone app. It runs this repo's Python on the phone (Chaquopy): `scanner/phone.py` is its entry point, and Kotlin holds only the BLE link, the screens and the logging service. There's no second copy of the scanner to keep in step. See [android/README.md](android/README.md), and its "Across the Python–Kotlin line" rules before changing `phone.py` or what Kotlin passes it.
 - `scanner/report.py` turns each read into sections of lines; `scan.py` prints them, `tui.py` styles them, and the app shows them as cards. A new read or a change to what one shows goes there, not in a front end.
 - `tui.py` is a front end only: it calls `scanner/car.py`, `scanner/logger.py` and `summarize.py` and holds one lock so a single request is on the adapter at a time. New reads go in `scanner/car.py`, not the TUI.
 - `scanner/elm/session.py` is the only code that speaks ELM327; `scanner/car.py` is the only code that decides which module to ask. Both are documented in [docs/adapters.md](docs/adapters.md).

@@ -48,4 +48,18 @@ android/app/.../Ui.kt        Compose screens; LogService.kt keeps a log going wi
 
 A change to what the scanner reads or shows goes in the Python and reaches the laptop and the phone alike. Tests: `uv run python -m unittest discover -s tests`. `tests/test_phone.py` drives `phone.py` with a fake BLE link and fake app hooks: connect, health, a refused write, and a log whose link drops, comes back and gets summarized. The build (`setup/android-sdk.sh --build`) runs them first.
 
+### Across the Python–Kotlin line
+
+What Kotlin hands Python arrives as Java objects. These rules come from bugs the laptop tests missed:
+
+- **A Kotlin `List` is a `java.util.ArrayList`, which Python can't iterate.** Call `.toArray()` first (`LinkPort.info`). A `ByteArray` holds signed bytes: `bytes(arr)` is right, iterating it gives -128..127.
+- **A Java exception's `str()` starts with its class name.** Use `phone._msg(e)` (its `getMessage()`) for text a person reads.
+- **Kotlin parameters are typed and non-null.** `None` for a `String` is a NullPointerException, and a float for a `Long` matches no overload.
+- **Display hooks (`traffic`, `section`, `row`, `status`) go through `phone._tell`.** They run UI code in the middle of a read or a drive log, and an exception from them must not end either.
+- **Once a link is open, close it on every failure.** The adapter takes one BLE connection at a time, so a leaked link refuses the next connect.
+- **Hooks run on the adapter thread.** State the screens change too goes through `MutableStateFlow.update {}`.
+- **Kotlin's catches log with `Log.e("yf", ...)`.** A `PyException`'s stack trace carries the Python traceback (`adb logcat -s yf python.stderr`).
+
+The fakes in `tests/test_phone.py` enforce the first three, so a slip there fails on the laptop.
+
 The build needs a Python 3.14 on the build machine (Chaquopy compiles the scanner with it). `setup/android-sdk.sh` gets one through uv and writes its path to `android/local.properties`. The APK carries Python for arm64 phones and the x86_64 emulator.
