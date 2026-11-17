@@ -2,7 +2,7 @@
 # Sets up Python and a venv the first time, then runs the scanner with whatever arguments you give.
 #
 #   powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --adapters
-#   powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --port ble:AA:BB:CC:DD:EE:FF --report
+#   powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --report   (the adapter is found once, then saved in .adapter)
 #
 # Works from a normal clone or straight from a WSL checkout (\\wsl.localhost\Ubuntu\home\...). The venv
 # lives in %LOCALAPPDATA%\yf-scanner so it never collides with a WSL .venv. Logs go to yf\logs as usual.

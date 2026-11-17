@@ -7,10 +7,12 @@ and a pty standing in for a USB one, both with the simulated Pilot behind them. 
 import asyncio
 import os
 import sys
+import tempfile
 import threading
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.environ["YF_ADAPTER_FILE"] = os.path.join(tempfile.mkdtemp(), ".adapter")  # never the repo's own .adapter
 
 import elm  # noqa: E402
 from car import Car  # noqa: E402
@@ -153,6 +155,35 @@ class TestPortNames(unittest.TestCase):
         self.assertEqual(elm.kind("/dev/ttyUSB0"), "USB/serial")
 
 
+class TestSaved(unittest.TestCase):
+    def setUp(self):
+        elm.forget()
+
+    def test_remember_forget(self):
+        self.assertIsNone(elm.saved())
+        self.assertIsNone(elm.remember("sim://pilot"), "the simulator is never saved")
+        self.assertIsNone(elm.saved())
+        self.assertEqual(elm.remember("/dev/ttyUSB0"), "/dev/ttyUSB0")
+        self.assertEqual(elm.saved(), "/dev/ttyUSB0")
+        self.assertTrue(elm.forget())
+        self.assertFalse(elm.forget())
+
+    def test_auto_uses_the_saved_port(self):
+        with open(elm.adapter.saved_path(), "w", encoding="utf-8") as f:
+            f.write("# comment\nsim://pilot?clean&latency=0\n")
+        ad = elm.connect("auto")
+        try:
+            self.assertEqual(ad.url, "sim://pilot?clean&latency=0")
+        finally:
+            ad.close()
+
+    def test_explicit_port_ignores_the_saved_one(self):
+        elm.remember("/dev/does-not-exist")
+        ad = elm.connect("sim://pilot?clean&latency=0")
+        ad.close()
+        self.assertEqual(elm.saved(), "/dev/does-not-exist")
+
+
 class TestClassify(unittest.TestCase):
     def test_types(self):
         c = elm.adapter.classify
@@ -225,6 +256,29 @@ class TestBle(BleTestCase):
         try:
             self.assertTrue(ad.car)
             self.assertIn("FFE0", str(ad.link.channel))
+        finally:
+            ad.close()
+
+    def test_connected_adapter_is_saved_and_auto_uses_it(self):
+        WORLD.append(ref_adapter())
+        elm.forget()
+        elm.connect("ble").close()
+        self.assertEqual(elm.saved(), "ble:AA:BB:CC:DD:EE:01")
+        with open(elm.adapter.saved_path(), encoding="utf-8") as f:
+            self.assertIn("ble:AA:BB:CC:DD:EE:01", f.read())
+        ad = elm.connect("auto")
+        try:
+            self.assertEqual(ad.url, "ble://AA:BB:CC:DD:EE:01")
+        finally:
+            ad.close()
+
+    def test_auto_falls_back_when_the_saved_adapter_is_gone(self):
+        elm.remember("ble://AA:BB:CC:DD:EE:99")
+        WORLD.append(ref_adapter())
+        ad = elm.connect("auto")
+        try:
+            self.assertEqual(ad.url, "ble://AA:BB:CC:DD:EE:01")
+            self.assertEqual(elm.saved(), "ble:AA:BB:CC:DD:EE:01")
         finally:
             ad.close()
 

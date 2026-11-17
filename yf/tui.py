@@ -1,7 +1,8 @@
 """YF TUI: the whole scanner in one terminal screen, from finding the adapter to summarizing a drive log.
 
     .venv/bin/python yf/tui.py --port DEMO          simulated Pilot (prove the laptop side first)
-    .venv/bin/python yf/tui.py --port ble:<address> the real car, key ON
+    .venv/bin/python yf/tui.py --connect            the real car, key ON: the saved adapter (.adapter), once
+                                                    one has connected; before that, --port auto finds it
 
 Tabs (keys 1-7):
     1 Connect   find adapters, connect, what the adapter says it is, which modules answer
@@ -442,8 +443,11 @@ class YfTui(App):
             t = self.query_one("#adapters", DataTable)
             t.clear()
             t.add_row("DEMO", "simulator", "simulated reference adapter + 2011 Pilot", key="DEMO")
+            prev = elm.saved()
+            if prev and prev not in {p for p, _, _ in found}:
+                t.add_row(prev, elm.kind(elm.normalize(prev)), "saved: the last adapter that answered", key=prev)
             for port, kind, desc in found:
-                t.add_row(port or "-", kind, desc, key=port or None)
+                t.add_row(port or "-", kind, desc + ("  (saved)" if port and port == prev else ""), key=port or None)
             n = sum(1 for p, _, _ in found if p)
             self.status(f"{n} possible adapter(s). Select one, then Connect." if n else
                         "Nothing that looks like an OBD adapter. Lit? Phone app closed? Bluetooth on?",
@@ -879,7 +883,8 @@ class YfTui(App):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", default="DEMO", help="auto, DEMO (default), a serial path, ble, ble:<address>, "
+    ap.add_argument("--port", help="default: the saved adapter (.adapter) if there is one, else DEMO. "
+                    "Or auto, DEMO, a serial path, ble, ble:<address>, "
                     "or socket://<ip>:<port>")
     ap.add_argument("--timeout", type=float, default=1.0, help="seconds to wait per reply (default 1.0)")
     ap.add_argument("--baud", type=int, help="USB/serial adapters: skip the baud-rate probe")
@@ -887,7 +892,7 @@ def main(argv=None):
     ap.add_argument("--log-dir", help="where logs go (default yf/logs)")
     ap.add_argument("--connect", action="store_true", help="connect on start")
     a = ap.parse_args(argv)
-    YfTui(a.port, a.timeout, a.protocol, a.baud, a.log_dir, connect=a.connect).run()
+    YfTui(a.port or elm.saved() or "DEMO", a.timeout, a.protocol, a.baud, a.log_dir, connect=a.connect).run()
 
 
 if __name__ == "__main__":

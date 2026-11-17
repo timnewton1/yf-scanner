@@ -16,7 +16,7 @@ Reference, read when a step needs it:
 2. **Reading is safe; clearing codes is not just reading.** `--clear-codes` resets readiness monitors and learned fuel trims. Ask first and mention emissions testing.
 3. **No actuator tests, no writes.** Nothing here commands the car. `--query` only sends read services. Don't improvise Honda commands.
 4. **Don't guess at a diagnosis.** Report what the data shows and what it can't. "(candidate)" decodes are unconfirmed.
-5. Logs go to `yf/logs/`. Don't commit them unless asked. Don't put a VIN or an adapter's Bluetooth address in the repo.
+5. Logs go to `yf/logs/`. Don't commit them unless asked. Don't put a VIN or an adapter's Bluetooth address in the repo. The adapter that last answered is saved in `.adapter` (git-ignored) and `--port auto`, the default, uses it, so commands and docs never need the address.
 6. **Prefer scripts to command lists** for multi-step setup: `yf/setup/` has them, and new ones go there.
 
 ## Commands you will use
@@ -25,11 +25,11 @@ Reference, read when a step needs it:
 yf/setup/setup.sh                                    # Linux / WSL / Pi: venv, requirements, BlueZ
 .venv/bin/python yf/yf_scan.py --port DEMO --report  # simulated Pilot
 .venv/bin/python yf/tui.py --port DEMO --connect     # the same, as a terminal UI (tabs 1-7, q quits)
-.venv/bin/python yf/yf_scan.py --adapters            # find the adapter
-.venv/bin/python yf/yf_scan.py --port <p> --report   # key ON: health check (codes, readiness, misfires, Mode 06, live, Honda)
-.venv/bin/python yf/yf_scan.py --port <p> --tag baseline --honda   # log a drive; Enter drops a noise marker
+.venv/bin/python yf/yf_scan.py --adapters            # find the adapter (shows the saved one too)
+.venv/bin/python yf/yf_scan.py --report              # key ON: health check (codes, readiness, misfires, Mode 06, live, Honda)
+.venv/bin/python yf/yf_scan.py --tag baseline --honda   # log a drive; Enter drops a noise marker
 .venv/bin/python yf/tools/summarize.py yf/logs/yf_XXXX.csv
-.venv/bin/python yf/yf_scan.py --port <p> --raw --query 0101 --module 1D   # one read-only request, every line shown
+.venv/bin/python yf/yf_scan.py --raw --query 0101 --module 1D   # one read-only request, every line shown
 .venv/bin/python -m unittest discover -s yf/tests    # tests (no hardware)
 ```
 

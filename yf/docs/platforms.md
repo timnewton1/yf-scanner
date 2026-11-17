@@ -7,8 +7,8 @@ The scanner is plain Python plus pyserial, and bleak for BLE. It runs anywhere t
 | Linux (desktop) | BlueZ | `yf/setup/setup.sh` | Expected to work like WSL below; not yet run on a desktop |
 | WSL2 on Windows | BlueZ in WSL, radio passed in by usbipd | `yf\setup\wsl-attach-bluetooth.ps1` in Windows, then `yf/setup/setup.sh` in WSL | **Works** (2011 Pilot, Intel AX radio, Ubuntu 26.04, 2026-11-16) |
 | Windows | Windows Bluetooth (WinRT) | `yf\setup\windows.ps1 <args>` | First contact worked here (same day, same adapter) with the earlier python-OBD scanner; the current driver and `windows.ps1` not yet run on Windows |
-| macOS | CoreBluetooth | venv + `pip install -r yf/requirements.txt` | Untested. BLE addresses on macOS are per-machine UUIDs, so pass what `--adapters` shows |
-| Raspberry Pi | BlueZ | `yf/setup/setup.sh`, then `yf/setup/pi-logger.sh --port ble:<address>` | Untested on a Pi; the unattended mode is tested against the simulator |
+| macOS | CoreBluetooth | venv + `pip install -r yf/requirements.txt` | Untested. BLE addresses on macOS are per-machine UUIDs: a `.adapter` saved on another OS won't match, and `auto` falls back to a scan and saves the new one |
+| Raspberry Pi | BlueZ | `yf/setup/setup.sh`, then `yf/setup/pi-logger.sh` | Untested on a Pi; the unattended mode is tested against the simulator |
 
 ## WSL2
 
@@ -30,10 +30,10 @@ If you'd rather keep Windows Bluetooth, run the scanner on Windows instead (next
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --adapters
-powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --port ble:AA:BB:CC:DD:EE:FF --report
+powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --report
 ```
 
-It works from a WSL checkout too (`\\wsl.localhost\Ubuntu\home\<you>\repos\yf-scanner\yf\setup\windows.ps1`): the venv stays on the Windows side, and the logs land in the same `yf/logs/`. The radio must not be attached to WSL at the time.
+It works from a WSL checkout too (`\\wsl.localhost\Ubuntu\home\<you>\repos\yf-scanner\yf\setup\windows.ps1`): the venv stays on the Windows side, and the logs land in the same `yf/logs/`, and the saved `.adapter` is shared (WSL and Windows both name a BLE adapter by its address). The radio must not be attached to WSL at the time.
 
 USB and Bluetooth Classic adapters show up as COM ports: `--port COM3`. `--adapters` lists them.
 
@@ -43,8 +43,8 @@ The idea: a Pi powered from a 12 V outlet, which is live only in ACC/ON (2011 ow
 
 ```sh
 yf/setup/setup.sh                                     # venv, bluez, gpiozero
-.venv/bin/python yf/yf_scan.py --adapters             # find the adapter's address
-yf/setup/pi-logger.sh --port ble:<address> --honda --gpio-button 17
+.venv/bin/python yf/yf_scan.py --adapter-info         # finds the adapter and saves it in .adapter
+yf/setup/pi-logger.sh --honda --gpio-button 17        # the service uses the saved adapter
 journalctl -u yf-logger -f                            # watch it
 ```
 

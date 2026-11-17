@@ -15,8 +15,8 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
    - Windows native: `yf\setup\windows.ps1 <args>` does setup and runs the scanner.
 2. `.venv/bin/python yf/yf_scan.py --port DEMO --report`. This must work before the car is involved.
 3. Adapter into the OBD port under the dash. Close any phone app connected to it first; it takes one connection at a time.
-4. `--adapters`, then `--port ble:<address> --adapter-info` (key off is fine). Check the `type:` it prints. If it isn't `ELM327 v1.5 BLE mini`, tell them, and read the `note:` lines for what that changes.
-5. Key ON (engine off is fine): `--port <port> --report`. If it won't connect, use the "Connecting" table in the README, one change at a time. Pass the same `--port` to every command after this. Don't force `--protocol`: the Pilot only answers 29-bit CAN, and auto-detect finds it.
+4. `--adapter-info` (key off is fine). It finds the adapter and saves it in `.adapter` (git-ignored), so no command after this needs `--port`. If it says several are in range, `--adapters`, then `--port ble:<address> --adapter-info` once. Check the `type:` it prints. If it isn't `ELM327 v1.5 BLE mini`, tell them, and read the `note:` lines for what that changes.
+5. Key ON (engine off is fine): `--report`. If it won't connect, use the "Connecting" table in the README, one change at a time. Don't force `--protocol`: the Pilot only answers 29-bit CAN, and auto-detect finds it.
 6. If this car isn't the 2011 already recorded, save `--report`, `--supported`, `--info` (leave the VIN out of the repo) and `--honda-probe`. Record what differs in [yf/docs/honda-enhanced.md](../../../yf/docs/honda-enhanced.md).
 
 ## Common asks
@@ -30,7 +30,7 @@ The scanner is `yf/yf_scan.py`, run from the repo root with the venv's Python. R
 | "Summarize that log" | `.venv/bin/python yf/tools/summarize.py yf/logs/<file>.csv` | Then read the CSV yourself for anything the summary doesn't cover |
 | "Misfires?" | `--misfires` | Per-cylinder counts. Uneven counts on one cylinder are worth following up (plug, coil, injector) |
 | "Transmission temp?" | `--honda-probe`, or log with `--honda` | ATF is a candidate decode: plausible on the 2011, not cross-checked |
-| "Log every drive" (Pi) | `yf/setup/pi-logger.sh --port ble:<address> --honda` | See the Pi section of platforms.md: power, clock, the marker button |
+| "Log every drive" (Pi) | `yf/setup/pi-logger.sh --honda` (after one `--adapter-info` on the Pi saves the adapter) | See the Pi section of platforms.md: power, clock, the marker button |
 | Something odd on the link | add `--raw` | Every line to and from the adapter. The log's last line counts retries and timeouts |
 
 ## Reading the numbers honestly

@@ -20,8 +20,7 @@ Everything lives in [`yf/`](yf/README.md); its README has the full command list 
 ```sh
 yf/setup/setup.sh                                     # Linux / WSL / Pi (Windows: yf\setup\windows.ps1)
 .venv/bin/python yf/yf_scan.py --port DEMO --report   # simulated Pilot: check the laptop side first
-.venv/bin/python yf/yf_scan.py --adapters             # find the adapter
-.venv/bin/python yf/yf_scan.py --port ble:<address> --report   # key ON: health check
+.venv/bin/python yf/yf_scan.py --report               # key ON: finds the adapter, saves it, health check
 ```
 
 ## Credits and license

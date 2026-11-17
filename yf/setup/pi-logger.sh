@@ -2,8 +2,11 @@
 # Install the unattended drive logger as a systemd service on a Raspberry Pi (or any Linux box
 # that rides in the car). Run yf/setup/setup.sh first.
 #
-#   yf/setup/pi-logger.sh --port ble:AA:BB:CC:DD:EE:FF [--gpio-button 17] [--honda] [--set noise]
+#   yf/setup/pi-logger.sh [--gpio-button 17] [--honda] [--set noise] [--port ...]
 #   yf/setup/pi-logger.sh --remove
+#
+# The adapter: the one saved in .adapter (connect once with yf_scan.py --adapter-info and it is), or
+# --port. Without either the service scans for one on every try.
 #
 # The service waits for the adapter and a running engine, logs each drive to yf/logs/ as its own
 # CSV, and closes the file 20 s after the engine stops. journalctl -u yf-logger -f shows what it's doing.
@@ -19,13 +22,15 @@ if [ "${1:-}" = "--remove" ]; then
   echo "removed yf-logger"
   exit 0
 fi
-if [ $# -eq 0 ] || ! printf '%s\n' "$@" | grep -q -- '--port'; then
-  sed -n 2,10p "$0"
-  echo
-  echo "Give --port (find it with: $repo/.venv/bin/python $repo/yf/yf_scan.py --adapters)"
-  exit 2
-fi
 [ -x "$repo/.venv/bin/python" ] || { echo "no venv; run yf/setup/setup.sh first"; exit 1; }
+if ! printf '%s\n' "$@" | grep -q -- '--port'; then
+  if [ -s "$repo/.adapter" ]; then
+    echo "adapter: $(grep -v '^#' "$repo/.adapter" | head -1) (saved in .adapter)"
+  else
+    echo "No saved adapter yet, so the service will scan on every try. To save one, connect once:"
+    echo "  $repo/.venv/bin/python $repo/yf/yf_scan.py --adapter-info"
+  fi
+fi
 
 groups_line=""
 getent group gpio >/dev/null && groups_line="SupplementaryGroups=gpio"

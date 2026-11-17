@@ -46,6 +46,57 @@ class NotConnected(Exception):
     """No ELM327 answered on the given port."""
 
 
+# --- the saved adapter ----------------------------------------------------------
+# Once an adapter answers, its port goes in <repo>/.adapter (gitignored), so `--port auto` (the
+# default) goes straight to it next time and no address has to be written anywhere in the repo.
+# YF_ADAPTER_FILE points it elsewhere (the tests do).
+
+SAVED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".adapter")
+
+
+def saved_path():
+    return os.path.abspath(os.environ.get("YF_ADAPTER_FILE") or SAVED_FILE)
+
+
+def saved():
+    """The port of the last adapter that answered, as you'd pass it to --port, or None."""
+    try:
+        with open(saved_path(), encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line
+    except OSError:
+        pass
+    return None
+
+
+def remember(url):
+    """Save a real adapter's port (never the simulator). Returns the saved port, or None."""
+    if kind(url) == "simulator":
+        return None
+    port = "ble:" + url[len("ble://"):] if url.lower().startswith("ble://") else url
+    if port == saved():
+        return port
+    try:
+        with open(saved_path(), "w", encoding="utf-8") as f:
+            f.write("# The adapter yf last connected to (written by elm/adapter.py; not in git).\n"
+                    "# --port auto, the default, uses it. Delete this file, or run --forget-adapter, to scan again.\n"
+                    f"{port}\n")
+    except OSError:
+        return None
+    return port
+
+
+def forget():
+    """Delete the saved adapter. Returns whether there was one."""
+    try:
+        os.remove(saved_path())
+        return True
+    except OSError:
+        return False
+
+
 class Adapter:
     """An open adapter: .elm is the session, .car is whether the car answered at setup."""
 
@@ -141,7 +192,8 @@ def _pick_ble(seconds=6.0):
     if not found:
         raise NotConnected("No BLE OBD adapter seen. Plugged in and lit? No phone connected to it? "
                            "Run --adapters to list everything in range.")
-    raise NotConnected("Several BLE adapters in range; pick one with --port ble:<address>:\n" +
+    raise NotConnected("Several BLE adapters in range; pick one with --port ble:<address> "
+                       "(it's remembered after that):\n" +
                        "\n".join(f"  {d['address']}  {d['name']}" for d in found))
 
 
@@ -162,7 +214,22 @@ def _auto():
 
 def connect(port="auto", timeout=1.0, protocol=None, baud=None, log=None, car=True):
     """Open an adapter on any transport and start a session. car=True also finds the protocol and
-    checks the car answers (Adapter.car says whether it did). Raises NotConnected if no adapter answers."""
+    checks the car answers (Adapter.car says whether it did). Raises NotConnected if no adapter answers.
+
+    port='auto' tries the saved adapter (.adapter) first, then looks for one. Any real adapter that
+    answers is saved for next time."""
+    if normalize(port).lower() == "auto" and saved():
+        prev = saved()
+        try:
+            return _connect(prev, timeout, protocol, baud, log, car)
+        except NotConnected as e:
+            print(f"Saved adapter {prev} didn't answer ({str(e)[:100]}); looking for others...")
+    ad = _connect(port, timeout, protocol, baud, log, car)
+    remember(ad.url)
+    return ad
+
+
+def _connect(port, timeout, protocol, baud, log, car):
     url = normalize(port)
     ble.last_link = ble.last_error = None
     try:

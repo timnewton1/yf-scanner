@@ -17,7 +17,8 @@ Goals: find out what's behind noises and rough running, and catch slow drift (fu
 Everything below in one terminal screen, with tabs for connecting, the health check, live values and logging with markers, Mode 06, info, a read-only console and log summaries:
 
 ```sh
-.venv/bin/python yf/tui.py --port DEMO --connect        # simulated Pilot; then --port ble:<address> for the car
+.venv/bin/python yf/tui.py --port DEMO --connect        # simulated Pilot
+.venv/bin/python yf/tui.py --connect                    # the car, once an adapter is saved (below); else --port auto
 ```
 
 Keys `1`-`7` switch tabs, `r` refreshes the current one, `m` drops a noise marker while recording, `q` quits. Clearing codes is on the Health tab and asks you to type `clear` first. The command line does the same things:
@@ -26,9 +27,9 @@ Keys `1`-`7` switch tabs, `r` refreshes the current one, `m` drops a noise marke
 yf/setup/setup.sh                                       # Linux / WSL / Pi: venv, requirements, Bluetooth
 .venv/bin/python yf/yf_scan.py --port DEMO --report     # simulated Pilot: prove the laptop side first
 .venv/bin/python yf/yf_scan.py --adapters               # what's plugged in / in Bluetooth range
-.venv/bin/python yf/yf_scan.py --port ble:<address> --adapter-info   # the adapter's chip and link (key off is fine)
+.venv/bin/python yf/yf_scan.py --adapter-info           # connect, save the adapter; its chip and link (key off is fine)
 
-# key ON (engine off is fine), always the same --port
+# key ON (engine off is fine); no --port needed once the adapter is saved
 .venv/bin/python yf/yf_scan.py --report                 # health check: everything below in one go
 .venv/bin/python yf/yf_scan.py --codes                  # light, stored / pending / permanent codes, readiness, both modules
 .venv/bin/python yf/yf_scan.py --misfires               # Mode 06 misfire counters per cylinder
@@ -45,7 +46,11 @@ yf/setup/setup.sh                                       # Linux / WSL / Pi: venv
 
 Windows without WSL: the same commands through `yf\setup\windows.ps1`, e.g. `powershell -ExecutionPolicy Bypass -File yf\setup\windows.ps1 --report`.
 
-Every command takes `--port`: `auto` (default: serial ports, then a BLE scan), `ble` or `ble:<address>`, `/dev/ttyUSB0`, `COM3`, `/dev/rfcomm0`, `socket://<ip>:<port>`, or `DEMO`. Once the adapter's address is known, pass `--port ble:<address>` to skip the scan. Each run prints the adapter's `type:`; anything other than `ELM327 v1.5 BLE mini` means it isn't the type these docs assume.
+Every command takes `--port`: `auto` (default), `ble` or `ble:<address>`, `/dev/ttyUSB0`, `COM3`, `/dev/rfcomm0`, `socket://<ip>:<port>`, or `DEMO`.
+
+**The saved adapter.** The first time a real adapter answers, its port goes in `.adapter` at the repo root (git-ignored, so the address never lands in the repo). After that `auto` goes straight to it: no `--port`, no scan. If it doesn't answer, `auto` looks for another (serial ports, then a BLE scan) and saves whichever answers. Only when several BLE adapters are in range do you need `--port ble:<address>`, once. `--forget-adapter` deletes the file. The TUI starts on the saved adapter too (DEMO if there is none).
+
+Each run prints the adapter's `type:`; anything other than `ELM327 v1.5 BLE mini` means it isn't the type these docs assume.
 
 Logs go to `yf/logs/` (git-ignored), one CSV per run, flushed every row. The live line and the CSV use dash units: mph, °F, kPa, %.
 
@@ -66,7 +71,7 @@ Logs go to `yf/logs/` (git-ignored), one CSV per run, flushed every row. The liv
 |---|---|
 | Adapter not seen | Adapter lit? Phone app (YMOBD) closed? It takes one connection at a time. Bluetooth on (Linux: `sudo systemctl start bluetooth`; WSL: radio attached, see [platforms](docs/platforms.md)). Then `--adapters` |
 | `BREDR ProfileUnavailable` / "No more profiles to connect to" | BlueZ is trying classic Bluetooth on an LE-only adapter. `yf/setup/setup.sh --le-only` |
-| Seen, won't connect | `--port ble:<address>` from `--adapters`. Unplug it from the car for 10 s and retry |
+| Seen, won't connect | `--port ble:<address>` from `--adapters` (saved once it works). Unplug it from the car for 10 s and retry |
 | Adapter answers, car doesn't | Key ON, adapter pushed fully in. Don't force `--protocol` (the Pilot only answers 29-bit) |
 | Slow or dropped replies | Raise `--timeout` (default 1.0 s). Move the laptop closer. `--raw` shows every line |
 | BLE keeps failing, adapter is dual-mode | Use its Classic side: pair (PIN 1234), `sudo rfcomm bind 0 <address>`, then `--port /dev/rfcomm0` (Windows: its COM port) |

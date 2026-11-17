@@ -18,8 +18,9 @@ Read-only except --clear-codes, which asks first.
     yf_scan.py --set noise --honda        smaller, faster set for chasing a noise, plus Honda reads
     yf_scan.py --unattended               Raspberry Pi: log every drive, one file each
 
---port: auto (serial ports, then a BLE scan), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3),
+--port: auto (the saved adapter, else serial ports, then a BLE scan), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3),
 ble (scan for one BLE adapter), ble:<address>, or socket://<ip>:<port> for a Wi-Fi adapter.
+The first adapter that answers is saved in .adapter (gitignored), so after that no --port is needed.
 """
 
 import argparse
@@ -73,6 +74,8 @@ def show_adapters():
         print(f"  {kind:18} {('--port ' + port) if port else '':32} {desc}")
     if not any(p for p, _, _ in found):
         print("Nothing that looks like an OBD adapter.")
+    if elm.saved():
+        print(f"Saved adapter (used by default): {elm.saved()}  (--forget-adapter to drop it)")
 
 
 # --- codes and readiness ----------------------------------------------------------
@@ -270,9 +273,10 @@ def query(car, hexreq, module):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", default="auto", help="auto, DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3), "
+    ap.add_argument("--port", default="auto", help="auto (default: the saved adapter, else look), DEMO, a serial path (/dev/ttyUSB0, /dev/rfcomm0, COM3), "
                     "ble, ble:<address>, or socket://<ip>:<port>")
     ap.add_argument("--adapters", action="store_true", help="list adapters on every transport (no connection), exit")
+    ap.add_argument("--forget-adapter", action="store_true", help="delete the saved adapter (.adapter), exit")
     ap.add_argument("--adapter-info", action="store_true", help="the adapter's chip, voltage reading and link "
                     "(BLE: which GATT pipe), then exit. Works with the key off")
     ap.add_argument("--timeout", type=float, default=1.0, help="seconds to wait per reply (default 1.0)")
@@ -305,6 +309,10 @@ def main(argv=None):
     ap.add_argument("--log-dir", help="where logs go (default yf/logs)")
     args = ap.parse_args(argv)
 
+    if args.forget_adapter:
+        prev = elm.saved()
+        print(f"Forgot {prev}; the next connect looks for an adapter again." if elm.forget() else "No saved adapter.")
+        return
     if args.adapters:
         show_adapters()
         return

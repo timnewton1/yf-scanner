@@ -22,8 +22,9 @@ import serial
 if __name__ not in serial.protocol_handler_packages:
     serial.protocol_handler_packages.append(__name__)
 
-from .adapter import REFERENCE, Adapter, NotConnected, connect, find_adapters, identify, kind, normalize  # noqa: E402
+from .adapter import (REFERENCE, Adapter, NotConnected, connect, find_adapters, forget, identify, kind,  # noqa: E402
+                      normalize, remember, saved)
 from .session import Elm, ElmError, LinkLost, Reply  # noqa: E402
 
 __all__ = ["REFERENCE", "Adapter", "NotConnected", "connect", "find_adapters", "identify", "kind", "normalize",
-           "Elm", "ElmError", "LinkLost", "Reply"]
+           "remember", "saved", "forget", "Elm", "ElmError", "LinkLost", "Reply"]
