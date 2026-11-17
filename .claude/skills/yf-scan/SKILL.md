@@ -1,6 +1,6 @@
 ---
 name: yf-scan
-description: Connect an ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini) to a 2009-2015 Honda Pilot, read codes, readiness and misfire counters, log drives with noise markers, and summarize what the logs show. Use for the Honda Pilot side of this repo (yf/), not the Jeep.
+description: Connect an ELM327 adapter (the repo assumes an ELM327 v1.5 BLE mini) to a 2009-2015 Honda Pilot, read codes, readiness and misfire counters, log drives with noise markers, and summarize what the logs show. Use whenever the person wants to set up, scan or log their Pilot.
 ---
 
 # Read the Pilot

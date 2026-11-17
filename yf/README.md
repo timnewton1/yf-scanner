@@ -1,6 +1,6 @@
 # yf: 2009–2015 Honda Pilot (YF3/YF4)
 
-The Honda half of this fork. Upstream's Jeep scanner talks to a pre-OBD2 Chrysler computer through a hand-wired Arduino, because nothing off the shelf speaks that protocol. The 2nd-gen Pilot is full OBD2, so an off-the-shelf **ELM327 adapter** replaces the Arduino and [python-OBD](https://github.com/brendan-w/python-OBD) replaces the custom protocol code. What carries over from upstream is the approach: a small Python tool, plain CSV logs, and an agent that reads them with you.
+The 2nd-gen Pilot is full OBD2, so an off-the-shelf **ELM327 adapter** and [python-OBD](https://github.com/brendan-w/python-OBD) are all it takes: a small Python tool, plain CSV logs, and an agent that reads them with you.
 
 Goals: find out what's behind noises and rough running, and catch slow drift (fuel trims, misfires, warm-up, charging) before it gets expensive.
 
