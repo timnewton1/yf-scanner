@@ -14,6 +14,14 @@ Goals: find out what's behind noises and rough running, and catch slow drift (fu
 
 ## Use
 
+Everything below in one terminal screen, with tabs for connecting, the health check, live values and logging with markers, Mode 06, info, a read-only console and log summaries:
+
+```sh
+.venv/bin/python yf/tui.py --port DEMO --connect        # simulated Pilot; then --port ble:<address> for the car
+```
+
+Keys `1`-`7` switch tabs, `r` refreshes the current one, `m` drops a noise marker while recording, `q` quits. Clearing codes is on the Health tab and asks you to type `clear` first. The command line does the same things:
+
 ```sh
 yf/setup/setup.sh                                       # Linux / WSL / Pi: venv, requirements, Bluetooth
 .venv/bin/python yf/yf_scan.py --port DEMO --report     # simulated Pilot: prove the laptop side first
@@ -77,6 +85,7 @@ The log summary line reports link quality: how many requests were retried becaus
 
 | Path | What |
 |---|---|
+| `tui.py` | The terminal UI (Textual) over the same layers: connect, health, live + CSV log, Mode 06, info, console, log summaries |
 | `yf_scan.py` | The command line: report, codes, misfires, monitors, supported, info, Honda probe, read-only query, logging |
 | `car.py` | The car: finds the modules, reads each one by its own address, decodes |
 | `logger.py` | Drive logs: CSV, markers (keyboard or Pi button), reconnect after a dropped link, unattended mode |
@@ -84,7 +93,7 @@ The log summary line reports link quality: how many requests were retried becaus
 | `elm/` | The adapter: `session.py` (the ELM327 dialogue, per-module requests, ISO-TP), `adapter.py` (ports, identifying the chip), `ble.py` (BLE transport) |
 | `obd2/` | SAE J1979 decoding: Mode 01 PIDs, readiness, trouble codes, Mode 06 |
 | `sim/` | Simulated reference adapter + 2011 Pilot, modeled on the real one (`--port DEMO`, tests) |
-| `tests/` | Parser tests on captured replies; car, CLI, logger and transport tests against the simulator |
+| `tests/` | Parser tests on captured replies; car, CLI, TUI, logger and transport tests against the simulator |
 | `tools/summarize.py` | Warm-up, charging, trims by condition, bank difference, VCM, markers |
 | `setup/` | `setup.sh` (Linux/WSL/Pi), `windows.ps1`, `wsl-attach-bluetooth.ps1`, `pi-logger.sh` |
 | `docs/` | [adapters](docs/adapters.md), [platforms](docs/platforms.md), [honda-enhanced](docs/honda-enhanced.md) |

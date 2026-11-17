@@ -24,6 +24,7 @@ Reference, read when a step needs it:
 ```sh
 yf/setup/setup.sh                                    # Linux / WSL / Pi: venv, requirements, BlueZ
 .venv/bin/python yf/yf_scan.py --port DEMO --report  # simulated Pilot
+.venv/bin/python yf/tui.py --port DEMO --connect     # the same, as a terminal UI (tabs 1-7, q quits)
 .venv/bin/python yf/yf_scan.py --adapters            # find the adapter
 .venv/bin/python yf/yf_scan.py --port <p> --report   # key ON: health check (codes, readiness, misfires, Mode 06, live, Honda)
 .venv/bin/python yf/yf_scan.py --port <p> --tag baseline --honda   # log a drive; Enter drops a noise marker
@@ -36,6 +37,7 @@ Windows without WSL: `powershell -ExecutionPolicy Bypass -File yf\setup\windows.
 
 ## Working on the code
 
+- `yf/tui.py` is a front end only: it calls `car.py`, `logger.py` and `tools/summarize.py` and holds one lock so a single request is on the adapter at a time. New reads go in `car.py`, not the TUI.
 - `yf/elm/session.py` is the only code that speaks ELM327; `yf/car.py` is the only code that decides which module to ask. Both are documented in [yf/docs/adapters.md](yf/docs/adapters.md).
 - The reference adapter returns only one reply to a broadcast when two modules answer. Address requests to one module (`to=`), never rely on a broadcast reply.
 - Anything learned on the real car goes into `yf/sim/pilot.py` (so DEMO and the tests behave like the car) and into `yf/tests/fixtures/pilot_2011.py` as captured lines.
