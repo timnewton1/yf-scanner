@@ -220,7 +220,10 @@ def run(what, *args):
 # --- drive log --------------------------------------------------------------------
 
 class _AppLog(logger.CsvLog):
-    """The CSV scan.py writes, with each row also sent to the screen."""
+    """The CSV scan.py writes, with each row also sent to the screen. The screen gets `shown` (the
+    Logger's latest: every column's last value) when it's set, since a quick row reads only some."""
+
+    shown = None
 
     def write(self, cells, marker=""):
         super().write(cells, marker)
@@ -229,7 +232,8 @@ class _AppLog(logger.CsvLog):
         elif marker == "reconnected":
             _tell("status", "Reconnected.")
         elif marker != "timeout":
-            _tell("row", _json(cells={n: report.fmt(v) for n, v in cells.items()}, marker=marker, rows=self.rows,
+            screen = self.shown if self.shown is not None else cells
+            _tell("row", _json(cells={n: report.fmt(v) for n, v in screen.items()}, marker=marker, rows=self.rows,
                              seconds=round(time.monotonic() - self.t0, 1)))
 
 
@@ -244,16 +248,18 @@ def _reopen():
     return _open(_target)
 
 
-def log_prepare(set_name, with_honda, tag, directory):
-    """Pick the columns and open the CSV. Returns its path, the columns, what the engine computer
-    doesn't answer, and the values worth a big tile ([name, label])."""
+def log_prepare(set_name, with_honda, quick, tag, directory):
+    """Pick the columns and open the CSV. quick: logger.QUICK_EVERY decides how often each value is
+    read. Returns its path, the columns, what the engine computer doesn't answer, and the values
+    worth a big tile ([name, label])."""
     global _log
     if _car is None or not _car.connected:
         return _json(error="Connect to the car first")
-    lg = logger.Logger(_car, logger.SETS[set_name], bool(with_honda), reopen=_reopen, quiet=True)
+    lg = logger.Logger(_car, logger.SETS[set_name], bool(with_honda), reopen=_reopen, quiet=True, quick=bool(quick))
     if not lg.names:
         return _json(error="None of those PIDs are answered by the engine computer")
     csv = _AppLog(lg.columns, tag.strip() or None, directory)
+    csv.shown = lg.latest
     _log = (lg, csv)
     tiles = [n for n in logger.LIVE_LINE if n in lg.columns] + [c["name"] for c in lg.extras]
     return _json(path=csv.path, columns=lg.columns, skipped=lg.skipped, tiles=[[n, logger.label(n)] for n in tiles])

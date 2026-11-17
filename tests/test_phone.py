@@ -8,6 +8,7 @@ Java ones whose str() is the class name, and a None or a wrong type for a Kotlin
 error (any such call fails the test, even where phone.py swallows the exception)."""
 
 import array
+import csv
 import json
 import os
 import sys
@@ -187,7 +188,7 @@ class TestPhone(unittest.TestCase):
 
     def test_log_with_marker_and_dropped_link_then_summary(self):
         with tempfile.TemporaryDirectory() as d:
-            prep = json.loads(phone.log_prepare("noise", True, "t", d))
+            prep = json.loads(phone.log_prepare("noise", True, False, "t", d))
             self.assertIn("ATF F (candidate)", [label for _, label in prep["tiles"]])
 
             def each(row):
@@ -214,6 +215,21 @@ class TestPhone(unittest.TestCase):
             lost = [s for s in self.h.statuses if s.startswith("Link lost")]
             self.assertIn("BLE link dropped", lost[0])
             self.assertNotIn("LinkException", lost[0])  # getMessage(), not the Java class name
+
+    def test_quick_log_shows_last_values_and_leaves_csv_blanks(self):
+        with tempfile.TemporaryDirectory() as d:
+            prep = json.loads(phone.log_prepare("drive", True, True, "", d))
+
+            def each(row):
+                if len(self.h.rows) == 6:
+                    self.h.stop.set()
+            self.h.on_row = each
+            done = json.loads(phone.log_run())
+            self.assertEqual(done["why"], "stopped")
+            with open(prep["path"], encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+        self.assertTrue(all(r["cells"].get("COOLANT_TEMP") for r in self.h.rows))  # the tile keeps its value
+        self.assertTrue(any(not r["coolant F"] for r in rows))  # the CSV says when it was read
 
 
 class TestConnectFails(unittest.TestCase):
@@ -274,7 +290,7 @@ class TestHooksThatThrow(unittest.TestCase):
                 self.h.stop.set()
         self.h.on_row = each
         with tempfile.TemporaryDirectory() as d:
-            json.loads(phone.log_prepare("drive", False, "", d))
+            json.loads(phone.log_prepare("drive", False, False, "", d))
             done = json.loads(phone.log_run())
         self.assertEqual(done["why"], "stopped")
         self.assertEqual(len(self.h.rows), 4)

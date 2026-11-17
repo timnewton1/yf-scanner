@@ -8,7 +8,7 @@ Tabs:
 |---|---|
 | Connect | Finds the BLE adapter and remembers it (like `.adapter`); **Demo** is the simulated Pilot. Shows the adapter's `type:`, ATI/AT@1/STI/ATRV and the GATT channel |
 | Health | The `--report` health check, section by section; codes only; **Clear codes** (asks you to type `clear`) |
-| Live | Drive logging with a big **MARK** button and quick words (whine, drone, clunk...); sets `drive` / `noise` / `all`, Honda reads on or off, a tag. The screen stays on; logging keeps going if it turns off (a notification shows it) |
+| Live | Drive logging with a big **MARK** button and quick words (whine, drone, clunk...); sets `drive` / `noise` / `all`, Honda reads on or off, Quick (the fast values every row, the rest every 10-60 s), a tag. The screen stays on; logging keeps going if it turns off (a notification shows it) |
 | Mode 06 | All results, failed only, misfire counters |
 | Info | VIN, module names and calibration IDs; supported PIDs; the Honda probe with raw bytes |
 | Console | One read-only request (01 02 03 06 07 09 0A 22 only) to one module; optional raw adapter traffic |

@@ -266,7 +266,7 @@ object Scanner {
 
     // --- drive log -----------------------------------------------------------------------
 
-    fun startLogging(set: String, honda: Boolean, tag: String) {
+    fun startLogging(set: String, honda: Boolean, quick: Boolean, tag: String) {
         val c = conn.value
         if (!c.connected) { toast.value = "Connect to the car first"; return }
         if (log.value.running || busy.value != null) return
@@ -275,7 +275,7 @@ object Scanner {
         markCount = 0
         scope.launch {
             val prep = try {
-                withContext(worker) { JSONObject(Py.call("log_prepare", set, honda, tag, logsDir.absolutePath)) }
+                withContext(worker) { JSONObject(Py.call("log_prepare", set, honda, quick, tag, logsDir.absolutePath)) }
             } catch (e: Exception) {  // uncaught here, it would take the app down
                 Log.e(TAG, "log_prepare", e)
                 toast.value = "Couldn't start the log: ${e.message}"

@@ -209,6 +209,7 @@ fun LiveTab() {
     val conn by Scanner.conn.collectAsState()
     var set by rememberSaveable { mutableStateOf("drive") }
     var honda by rememberSaveable { mutableStateOf(true) }
+    var quick by rememberSaveable { mutableStateOf(false) }
     var tag by rememberSaveable { mutableStateOf("") }
     var word by rememberSaveable { mutableStateOf("") }
     val withBt = rememberWithBluetooth()
@@ -229,8 +230,13 @@ fun LiveTab() {
                 Spacer(Modifier.width(8.dp))
                 Text("Honda reads: ATF temp, VCM cylinders (candidate decodes)")
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(quick, { quick = it })
+                Spacer(Modifier.width(8.dp))
+                Text("Quick: rpm, speed, load, throttle, timing, trim and VCM every row; the rest every 10-60 s")
+            }
             OutlinedTextField(tag, { tag = it }, label = { Text("Tag for the file name (baseline, noise, after-plugs)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(onClick = { withBtIfReal(conn.target, withBt) { Scanner.startLogging(set, honda, tag) } }, enabled = conn.connected,
+            Button(onClick = { withBtIfReal(conn.target, withBt) { Scanner.startLogging(set, honda, quick, tag) } }, enabled = conn.connected,
                 modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Start logging") }
             Note("Engine running. Logs go to the Logs tab as CSV (the same columns as scan.py, so summarize.py reads them too). The screen stays on while logging; the log keeps going if it turns off. Don't work the phone while driving: let a passenger tap the marker.")
             if (log.status.isNotEmpty()) SelectionContainer { Note(log.status) }
