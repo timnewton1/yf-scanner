@@ -55,7 +55,9 @@ def summarize(path, WIN=3.0, STEP=30.0, name=None):
               + ", ".join(f"{num(r, 'elapsed_s'):.0f} s" for r in link if r["marker"].startswith("link lost")))
     rows = data_rows
 
-    # timeline: one row every STEP seconds, plus the last row; columns the log doesn't have are left out
+    # timeline: one row every STEP seconds, plus the last row; columns the log doesn't have are left out.
+    # Each cell is the column's last value at or before that row: a quick log reads slow values only
+    # every 10-60 s, so the row itself often has them blank.
     TL = [("rpm", "rpm", 5, "5.0f"), ("mph", "mph", 4, "4.0f"), ("load %", "load", 4, "4.0f"), ("throttle %", "thr", 4, "4.0f"),
           ("coolant F", "ect", 4, "4.0f"), ("STFT1 %", "st1", 6, "+6.1f"), ("LTFT1 %", "lt1", 6, "+6.1f"),
           ("STFT2 %", "st2", 6, "+6.1f"), ("LTFT2 %", "lt2", 6, "+6.1f"), ("volts", "V", 5, "5.1f")]
@@ -63,14 +65,18 @@ def summarize(path, WIN=3.0, STEP=30.0, name=None):
     say(f"\nTimeline, every {STEP:.0f} s:")
     say(f"{'t':>6} " + " ".join(f"{h:>{w}}" for _, h, w, _ in TL) + "  marker")
     next_t = 0.0
+    last = {}
     for r in rows:
+        for k, *_ in TL:
+            if num(r, k) is not None:
+                last[k] = num(r, k)
         tr = num(r, "elapsed_s")
         if tr is None or not (tr >= next_t or r is rows[-1]):
             continue
         next_t = tr + STEP
         cells = []
         for k, _, w, f in TL:
-            x = num(r, k)
+            x = last.get(k)
             cells.append(f"{x:{f}}" if x is not None else f"{'-':>{w}}")
         say(f"{tr:6.0f} " + " ".join(cells) + (f"  {r['marker']}" if r.get("marker") else ""))
 

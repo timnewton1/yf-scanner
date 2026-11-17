@@ -272,6 +272,19 @@ class TestQuick(unittest.TestCase):
         self.assertNotEqual(rows[0].split(",")[4], "")  # coolant read on the first row
         self.assertEqual([r.split(",")[4] for r in rows[1:]], ["", ""])
 
+    def test_summary_timeline_carries_slow_values(self):
+        import summarize
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "q.csv")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("time,elapsed_s,marker,rpm,coolant F\n")
+                for i in range(70):
+                    f.write(f"t,{i},,{700 + i},{'150' if i % 10 == 0 else ''}\n")
+            text = summarize.summarize(p)
+        timeline = text.split("Timeline")[1].split("\n\n")[0].splitlines()[2:]
+        self.assertEqual(len(timeline), 4, timeline)  # 0, 30, 60 s and the last row
+        self.assertTrue(all(ln.split()[2] == "150" for ln in timeline), timeline)
+
     def test_nothing_fast_waits_instead_of_writing_empty_rows(self):
         lg = logger.Logger(self.car, ["COOLANT_TEMP"], quiet=True, quick=True)
         with tempfile.TemporaryDirectory() as d:
