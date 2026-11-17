@@ -44,6 +44,39 @@ class TestCar(unittest.TestCase):
         self.assertTrue(all(v[n] is not None for n in names), v)
         self.assertEqual(v["RPM"] > 500, True)
 
+    def test_one_missed_batch_does_not_end_batching(self):
+        car = Car.open("sim://pilot?clean&latency=0")
+        try:
+            sim = car.elm.port.sim
+            names = logger.SETS["noise"]  # six PIDs: one request
+            sim.drop_rate = 1.0  # every multi-frame reply loses a frame, even after retries
+            v = car.read(names)
+            self.assertTrue(all(v[n] is not None for n in names), v)  # read one at a time instead
+            sim.drop_rate = 0.0
+            before = len(sim.sent)
+            car.read(names)
+            obd = [c for c in sim.sent[before:] if not c.startswith("AT")]
+            self.assertEqual(len(obd), 1, obd)  # still batching
+        finally:
+            car.close()
+
+    def test_batching_stops_after_several_misses_in_a_row(self):
+        car = Car.open("sim://pilot?clean&latency=0")
+        try:
+            sim = car.elm.port.sim
+            names = logger.SETS["noise"]
+            sim.drop_rate = 1.0
+            for _ in range(3):
+                car.read(names)
+            self.assertFalse(car.modules[car.engine].batch)
+            sim.drop_rate = 0.0
+            before = len(sim.sent)
+            car.read(names)
+            obd = [c for c in sim.sent[before:] if not c.startswith("AT")]
+            self.assertEqual(len(obd), 6, obd)
+        finally:
+            car.close()
+
     def test_unsupported_names_are_none(self):
         v = self.car.read(["RPM", "AMBIANT_AIR_TEMP", "OIL_TEMP"])
         self.assertIsNone(v["AMBIANT_AIR_TEMP"])

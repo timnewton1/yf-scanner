@@ -68,7 +68,7 @@ Logs go to `logs/` (git-ignored), one CSV per run, flushed every row. The live l
 
 **Noise markers:** while logging, press Enter when you hear something, or type a word first (`whine`, `drone`, `clunk`). The summary lines each marker up with rpm, speed, load and the rpm/mph ratio (a gear proxy): a noise that follows rpm is engine side, one that follows road speed is wheels or driveline, one that only shows up at high load points at mounts or exhaust, and one that only shows up with VCM on three cylinders points at VCM.
 
-**Speed:** over BLE each request takes about 0.15 s, and the scanner asks for six PIDs per request. The `drive` set (18 PIDs) is three requests, about 2 rows/s; `noise` (6 PIDs) is one, about 5 rows/s. `--honda` adds two requests per row.
+**Speed:** over BLE each request takes about 0.15 s, and the scanner asks for six PIDs per request (one PID at a time only if the engine computer misses three multi-PID requests in a row). The `drive` set (18 PIDs) is three requests, about 2 rows/s; `noise` (6 PIDs) is one, about 5 rows/s. `--honda` adds two requests per row.
 
 ## What this car answers (2011 Pilot, measured)
 

@@ -12,6 +12,10 @@ from .obd2 import dtc, monitors, pids
 from .obd2.status import Status
 
 MAX_PIDS_PER_REQUEST = 6  # ISO 15765-4 allows up to 6 PIDs in one Mode 01 request
+# Multi-PID requests with no reply, in a row, before a module is asked one PID at a time. A module
+# that can't take several PIDs fails every time; over BLE a long reply sometimes loses a frame even
+# after the session's retries, and one such miss shouldn't make every row after it six times slower.
+BATCH_MISSES_BEFORE_SINGLE = 3
 
 # Services the --query option may send. All are reads; nothing here can change the car.
 READ_ONLY_SERVICES = {0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x0A, 0x22}
@@ -24,6 +28,7 @@ class Module:
         self.mids = None        # Mode 06 monitor IDs (filled on first use)
         self.info = None        # Mode 09 PIDs
         self.batch = True       # whether it accepts several PIDs per request
+        self.batch_misses = 0   # multi-PID requests in a row that got no reply
 
     def __repr__(self):
         return f"Module({self.addr:02X} {self.name}, {len(self.pids)} PIDs)"
@@ -139,9 +144,14 @@ class Car:
             r = self.elm.request(bytes([0x01] + chunk), to=addr).positive(0x01)
             if addr in r:
                 got.update(pids.split_multi(r[addr]))
+                if m and len(chunk) > 1:
+                    m.batch_misses = 0
             elif len(chunk) > 1:
-                # no reply to a multi-PID request: fall back to one at a time from now on
-                m.batch = False
+                # no reply to a multi-PID request: ask this chunk one at a time, and stop batching
+                # only once several have failed in a row
+                if m:
+                    m.batch_misses += 1
+                    m.batch = m.batch_misses < BATCH_MISSES_BEFORE_SINGLE
                 for p in chunk:
                     r1 = self.elm.request(bytes([0x01, p]), to=addr).positive(0x01)
                     if addr in r1:
