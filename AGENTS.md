@@ -22,7 +22,7 @@ Reference, read when a step needs it:
 ## Commands you will use
 
 ```sh
-setup/setup.sh                                           # Linux / WSL / Pi: venv, requirements, BlueZ
+setup/setup.sh                                           # Linux / WSL / Pi: uv, .venv (uv sync), BlueZ
 .venv/bin/python scan.py --port DEMO --report            # simulated Pilot
 .venv/bin/python tui.py --port DEMO --connect            # the same, as a terminal UI (tabs 1-7, q quits)
 .venv/bin/python scan.py --adapters                      # find the adapter (shows the saved one too)
@@ -36,6 +36,8 @@ setup/setup.sh                                           # Linux / WSL / Pi: ven
 Windows without WSL: `powershell -ExecutionPolicy Bypass -File setup\windows.ps1 <same arguments>`.
 
 ## Working on the code
+
+- Dependencies live in `pyproject.toml` and `uv.lock`, managed by [uv](https://docs.astral.sh/uv/): `uv add <pkg>` to add one, `uv sync` to update `.venv`. Commit `uv.lock` with the change. `uv run python ...` works anywhere `.venv/bin/python ...` does.
 
 - `tui.py` is a front end only: it calls `scanner/car.py`, `scanner/logger.py` and `summarize.py` and holds one lock so a single request is on the adapter at a time. New reads go in `scanner/car.py`, not the TUI.
 - `scanner/elm/session.py` is the only code that speaks ELM327; `scanner/car.py` is the only code that decides which module to ask. Both are documented in [docs/adapters.md](docs/adapters.md).

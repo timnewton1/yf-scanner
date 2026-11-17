@@ -1,0 +1,17 @@
+[project]
+name = "yf-scanner"
+version = "0.1.0"
+description = "Read a 2009-2015 Honda Pilot through an ELM327 adapter"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyserial>=3.5",
+    "textual>=1.0",  # tui.py only; the command line works without it
+    "bleak>=0.22",   # BLE adapters only; USB, rfcomm, Wi-Fi and DEMO work without it
+]
+
+[project.optional-dependencies]
+pi = ["gpiozero", "lgpio"]  # Raspberry Pi marker button (--gpio-button): uv sync --extra pi
+
+[tool.uv]
+package = false  # scripts run in place (scan.py, tui.py); nothing to build or install

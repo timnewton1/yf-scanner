@@ -92,7 +92,7 @@ class Markers:
         try:
             from gpiozero import Button
         except ImportError:
-            print("--gpio-button needs gpiozero (pip install gpiozero); markers from the button are off")
+            print("--gpio-button needs gpiozero (uv sync --extra pi); markers from the button are off")
             return None
         b = Button(pin, bounce_time=0.05)
         b.when_pressed = lambda: self.add("button")

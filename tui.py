@@ -14,7 +14,7 @@ Tabs (keys 1-7):
     6 Console   one read-only request (services 01 02 03 06 07 09 0A 22) to one module; raw adapter traffic
     7 Logs      the CSVs in logs/ and their summaries
 
-Read-only except "Clear codes", same as scan.py. Needs textual (pip install -r requirements.txt).
+Read-only except "Clear codes", same as scan.py. Needs textual (uv sync, or setup/setup.sh).
 """
 
 import argparse

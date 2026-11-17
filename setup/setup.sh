@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Set up yf-scanner on Linux, WSL2 or a Raspberry Pi: Python venv, requirements, Bluetooth.
+# Set up yf-scanner on Linux, WSL2 or a Raspberry Pi: uv, the .venv (uv sync), Bluetooth.
 #
-#   setup/setup.sh            venv + requirements + BlueZ running
+#   setup/setup.sh            uv + .venv + BlueZ running
 #   setup/setup.sh --le-only  also switch BlueZ to Bluetooth LE only (fixes "BREDR ProfileUnavailable"
 #                             with LE-only adapters; turns off classic Bluetooth on this machine)
 #
@@ -26,18 +26,18 @@ done
 
 say() { printf '\n== %s\n' "$*"; }
 
-say "Python"
-if ! python3 -c 'import venv, ensurepip' 2>/dev/null; then
-  echo "python3 can't make a venv; installing python3-venv (needs sudo)"
-  sudo apt-get update -qq && sudo apt-get install -y python3-venv python3-pip
+say "Python (uv)"
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv >/dev/null; then
+  echo "installing uv (Python and venv manager) into ~/.local/bin"
+  command -v curl >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y curl; }
+  curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
-if [ ! -x "$repo/.venv/bin/python" ]; then
-  python3 -m venv "$repo/.venv"
-fi
-"$repo/.venv/bin/pip" install -q --upgrade pip
-"$repo/.venv/bin/pip" install -q -r "$repo/requirements.txt"
+cd "$repo"
 if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
-  "$repo/.venv/bin/pip" install -q gpiozero lgpio || echo "(gpiozero not installed; the marker button won't work)"
+  uv sync --extra pi || { echo "(gpiozero not installed; the marker button won't work)"; uv sync; }
+else
+  uv sync
 fi
 "$repo/.venv/bin/python" "$repo/scan.py" --port DEMO --codes >/dev/null && echo "venv OK, DEMO runs"
 

@@ -362,7 +362,7 @@ def find_adapters(ble_seconds=6.0):
     if not ble_seconds:
         return out
     if ble.BleakClient is None:
-        out.append(("", "BLE", "not scanned: install 'bleak' (pip install -r requirements.txt)"))
+        out.append(("", "BLE", "not scanned: install 'bleak' (uv sync)"))
         return out
     try:
         for d in ble.scan(ble_seconds):

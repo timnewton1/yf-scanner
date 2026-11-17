@@ -7,7 +7,7 @@ The scanner is plain Python plus pyserial, and bleak for BLE. It runs anywhere t
 | Linux (desktop) | BlueZ | `setup/setup.sh` | Expected to work like WSL below; not yet run on a desktop |
 | WSL2 on Windows | BlueZ in WSL, radio passed in by usbipd | `setup\wsl-attach-bluetooth.ps1` in Windows, then `setup/setup.sh` in WSL | **Works** (2011 Pilot, Intel AX radio, Ubuntu 26.04, 2026-11-16) |
 | Windows | Windows Bluetooth (WinRT) | `setup\windows.ps1 <args>` | First contact worked here (same day, same adapter) with the earlier python-OBD scanner; the current driver and `windows.ps1` not yet run on Windows |
-| macOS | CoreBluetooth | venv + `pip install -r requirements.txt` | Untested. BLE addresses on macOS are per-machine UUIDs: a `.adapter` saved on another OS won't match, and `auto` falls back to a scan and saves the new one |
+| macOS | CoreBluetooth | [uv](https://docs.astral.sh/uv/), then `uv sync` | Untested. BLE addresses on macOS are per-machine UUIDs: a `.adapter` saved on another OS won't match, and `auto` falls back to a scan and saves the new one |
 | Raspberry Pi | BlueZ | `setup/setup.sh`, then `setup/pi-logger.sh` | Untested on a Pi; the unattended mode is tested against the simulator |
 
 ## WSL2
@@ -15,7 +15,7 @@ The scanner is plain Python plus pyserial, and bleak for BLE. It runs anywhere t
 WSL has no Bluetooth of its own. `usbipd-win` lends it the laptop's USB Bluetooth radio, and **Windows loses Bluetooth while it's lent**.
 
 1. Windows: `powershell -ExecutionPolicy Bypass -File setup\wsl-attach-bluetooth.ps1`. It elevates itself, installs usbipd-win if needed, finds the Bluetooth radio, and attaches it to WSL. To give it back: run it again with `-Detach`.
-2. WSL: `setup/setup.sh`. It installs `python3-venv` and `bluez` if they're missing, builds `.venv`, sets BlueZ to **LE only**, and restarts it.
+2. WSL: `setup/setup.sh`. It installs [uv](https://docs.astral.sh/uv/) and `bluez` if they're missing, builds `.venv` with `uv sync`, sets BlueZ to **LE only**, and restarts it.
 3. `.venv/bin/python scan.py --adapters`.
 
 Why LE only: BlueZ in dual mode tries to connect the adapter over classic Bluetooth first, and bleak fails with `org.bluez.Error.BREDR.ProfileUnavailable: No more profiles to connect to`. `ControllerMode = le` in `/etc/bluetooth/main.conf` fixes it. On WSL nothing else uses Bluetooth. On a desktop it turns off classic Bluetooth (headphones), so `setup.sh` only does it there with `--le-only`.
@@ -26,7 +26,7 @@ If you'd rather keep Windows Bluetooth, run the scanner on Windows instead (next
 
 ## Windows
 
-`setup\windows.ps1` installs Python with winget if there is none, makes a venv in `%LOCALAPPDATA%\yf-scanner\venv`, installs the requirements, and passes its arguments to `scan.py`:
+`setup\windows.ps1` installs uv if there is none, has it sync a venv in `%LOCALAPPDATA%\yf-scanner\venv` (uv fetches Python too if needed), and passes its arguments to `scan.py`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup\windows.ps1 --adapters

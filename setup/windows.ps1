@@ -1,5 +1,6 @@
 # Run yf-scanner natively on Windows, through Windows' own Bluetooth (no WSL, no usbipd).
-# Sets up Python and a venv the first time, then runs the scanner with whatever arguments you give.
+# Installs uv the first time, syncs the venv (uv fetches Python itself if needed), then runs the
+# scanner with whatever arguments you give.
 #
 #   powershell -ExecutionPolicy Bypass -File setup\windows.ps1 --adapters
 #   powershell -ExecutionPolicy Bypass -File setup\windows.ps1 --report   (the adapter is found once, then saved in .adapter)
@@ -10,36 +11,20 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $venv = Join-Path $env:LOCALAPPDATA 'yf-scanner\venv'
 $py = Join-Path $venv 'Scripts\python.exe'
-$req = Join-Path $repo 'requirements.txt'
-$stamp = Join-Path $venv 'requirements.stamp'
 
-function Find-Python {
-    foreach ($c in @('py', 'python')) {
-        $cmd = Get-Command $c -ErrorAction SilentlyContinue
-        if ($cmd -and $cmd.Source -notmatch 'WindowsApps') { return $c }  # skip the Store alias stub
-    }
-    return $null
-}
-
-if (-not (Test-Path $py)) {
-    $base = Find-Python
-    if (-not $base) {
-        Write-Host 'Python not found; installing it with winget...'
-        winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-        Write-Host 'Python installed. Open a new PowerShell window and run this again.'
+$env:Path = "$(Join-Path $env:USERPROFILE '.local\bin');$env:Path"
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host 'uv not found; installing it...'
+    powershell -ExecutionPolicy Bypass -c 'irm https://astral.sh/uv/install.ps1 | iex'
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Host 'uv installed. Open a new PowerShell window and run this again.'
         exit 0
     }
-    Write-Host "Creating venv in $venv"
-    New-Item -ItemType Directory -Force (Split-Path $venv) | Out-Null
-    if ($base -eq 'py') { & py -3 -m venv $venv } else { & python -m venv $venv }
 }
 
-$want = (Get-FileHash $req).Hash
-if (-not (Test-Path $stamp) -or (Get-Content $stamp) -ne $want) {
-    & $py -m pip install -q --upgrade pip
-    & $py -m pip install -q -r $req
-    Set-Content $stamp $want
-}
+$env:UV_PROJECT_ENVIRONMENT = $venv
+Push-Location $repo
+try { & uv sync --quiet; if ($LASTEXITCODE) { exit $LASTEXITCODE } } finally { Pop-Location }
 
 $bt = Get-PnpDevice -Class Bluetooth -Status OK -ErrorAction SilentlyContinue
 if (-not $bt) { Write-Warning 'No working Bluetooth radio found. Turn Bluetooth on in Settings (or is it attached to WSL by usbipd?).' }

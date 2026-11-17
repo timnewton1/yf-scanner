@@ -81,7 +81,7 @@ def hint(err=""):
 
 def require_bleak():
     if BleakClient is None:
-        raise LinkError("BLE needs the 'bleak' package: .venv/bin/pip install -r requirements.txt")
+        raise LinkError("BLE needs the 'bleak' package: uv sync")
 
 
 class Channel:
