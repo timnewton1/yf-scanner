@@ -1,4 +1,4 @@
-"""The TUI, headless, against the simulated Pilot: connect, health, live + CSV with a marker, Mode 06,
+"""The TUI, headless, against the simulated Pilot: connect, health, quick live + CSV with a marker, Mode 06,
 info, a read-only query (and a refused write), log summary. Skipped if textual isn't installed."""
 
 import asyncio
@@ -18,7 +18,7 @@ except ImportError:
     textual = None
 
 if textual:
-    from textual.widgets import DataTable, RichLog, Static
+    from textual.widgets import DataTable, RichLog, Static, Switch
 
     import tui  # noqa: E402
 
@@ -62,6 +62,7 @@ class TestTui(unittest.TestCase):
                 self.assertIn("Highest: cylinder 3", h)
 
                 await pilot.press("3")
+                app.query_one("#quick", Switch).value = True
                 await pilot.click("#live-btn")
                 await self.wait(pilot, lambda: app.live_running and len(app.rate) > 2)
                 await pilot.click("#rec-btn")
@@ -76,7 +77,10 @@ class TestTui(unittest.TestCase):
                 with open(os.path.join(d, logs[0]), encoding="utf-8") as f:
                     rows = list(csv.DictReader(f))
                 self.assertIn("mark1", [r["marker"] for r in rows])
-                self.assertTrue(all(r["rpm"] for r in rows if not r["marker"].startswith(("timeout", "link"))))
+                data = [r for r in rows if not r["marker"].startswith(("timeout", "link"))]
+                self.assertTrue(all(r["rpm"] for r in data))
+                self.assertTrue(any(not r["coolant F"] for r in data))  # quick: coolant only every 10 s
+                self.assertTrue(str(app.query_one("#livetable", DataTable).get_cell("COOLANT_TEMP", "now")))
 
                 await pilot.press("4")
                 await pilot.click("#mode06-btn")

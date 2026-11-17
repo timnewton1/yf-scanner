@@ -228,6 +228,8 @@ class YfTui(App):
                                  value="drive", allow_blank=False, id="pidset")
                     yield Label("Honda")
                     yield Switch(value=False, id="honda")
+                    yield Label("Quick")
+                    yield Switch(value=False, id="quick", tooltip="noise values every row, the rest every 10-60 s")
                     yield Button("Start live", id="live-btn", variant="primary")
                 with Horizontal(classes="row"):
                     yield Label("Tag")
@@ -522,7 +524,7 @@ class YfTui(App):
             return
         names = logger.SETS[self.query_one("#pidset", Select).value]
         self.lg = LockedLogger(self, self.car, names, self.query_one("#honda", Switch).value, reopen=self.reopen,
-                               quiet=True)
+                               quiet=True, quick=self.query_one("#quick", Switch).value)
         if not self.lg.columns:
             self.status("None of those PIDs are supported by the engine module.", "error")
             return
@@ -540,6 +542,7 @@ class YfTui(App):
         self.query_one("#rec-btn", Button).disabled = False
         self.query_one("#pidset", Select).disabled = True
         self.query_one("#honda", Switch).disabled = True
+        self.query_one("#quick", Switch).disabled = True
         if self.lg.skipped:
             self.status(f"Not answered by this engine computer, skipped: {', '.join(self.lg.skipped)}")
         self.run_live()
@@ -599,6 +602,7 @@ class YfTui(App):
         self.query_one("#rec-btn", Button).disabled = True
         self.query_one("#pidset", Select).disabled = False
         self.query_one("#honda", Switch).disabled = False
+        self.query_one("#quick", Switch).disabled = False
         if why == "link":
             self.status("Live stopped: the link didn't come back within 30 s. Connect again on tab 1.", "error")
         elif why == "stopped":
