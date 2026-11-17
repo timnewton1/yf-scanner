@@ -216,6 +216,10 @@ class BleLink:
             except Exception:
                 pass
             self.client = None
+        try:
+            self._call(self._cancel_tasks(), 3)  # bleak leaves monitor tasks running; end them quietly
+        except Exception:
+            pass
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(2)
         if not self._loop.is_running():
@@ -257,6 +261,13 @@ class BleLink:
                 self._buf.clear()
         except BleakError as e:
             raise LinkError(f"BLE: {e}. {hint(e)}") from e
+
+    @staticmethod
+    async def _cancel_tasks():
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _close(self):
         if self.channel is not None and self.client.is_connected:

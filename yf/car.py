@@ -83,7 +83,8 @@ class Car:
         out = set()
         base = 0
         while base <= 0xE0:
-            r = self.elm.request(bytes([mode, base]), to=addr).positive(mode)
+            # past the first range the module has said it has more, so silence is a glitch: retry it
+            r = self.elm.request(bytes([mode, base]), to=addr, retry_silent=base > 0).positive(mode)
             p = r.get(addr)
             if not p or len(p) < 6:
                 break
@@ -196,7 +197,8 @@ class Car:
     def monitor(self, mid, addr=None):
         """[monitors.Test] for one monitor ID, or None if no answer."""
         addr = self.engine if addr is None else addr
-        p = self.elm.request(bytes([0x06, mid]), to=addr).positive(0x06).get(addr)
+        known = self.modules.get(addr) is not None and mid in (self.modules[addr].mids or ())
+        p = self.elm.request(bytes([0x06, mid]), to=addr, retry_silent=known).positive(0x06).get(addr)
         return None if p is None else monitors.parse(p)
 
     def misfires(self, addr=None):
@@ -204,12 +206,8 @@ class Car:
         Cylinders whose monitor doesn't answer are missing."""
         addr = self.engine if addr is None else addr
         out = {}
-        supported = self.mids(addr)
-        for cyl in range(1, 7):
-            mid = 0xA1 + cyl
-            if supported and mid not in supported:
-                continue
-            tests = self.monitor(mid, addr)
+        for cyl in range(1, 7):  # asked even if the supported-MID chain broke: six cheap reads
+            tests = self.monitor(0xA1 + cyl, addr)
             if tests:
                 out[cyl] = {t.name: t.value for t in tests if t.tid in monitors.MISFIRE_TIDS}
         return out
@@ -252,7 +250,7 @@ class Car:
         addr = cand["module"] if self.elm.is_29bit else None
         if addr is None:
             return None, None, None
-        r = self.elm.request(cand["request"], to=addr)
+        r = self.elm.request(cand["request"], to=addr, retry_silent=addr in self.modules)
         p = r.get(addr)
         if p is None:
             return None, None, None
