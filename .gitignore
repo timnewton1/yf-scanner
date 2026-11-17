@@ -4,3 +4,13 @@ __pycache__/
 .DS_Store
 logs/
 .adapter
+
+# Android app (android/): Gradle and Kotlin caches, build output, the machine's SDK and build Python paths
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+.idea/
+*.iml

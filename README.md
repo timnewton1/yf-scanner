@@ -53,6 +53,8 @@ setup/setup.sh                                 # Linux / WSL / Pi: venv, require
 .venv/bin/python summarize.py logs/yf_XXXX.csv
 ```
 
+On a phone instead of a laptop: the Android app in [android/](android/README.md) (`setup/android-sdk.sh --install`).
+
 Windows without WSL: the same commands through `setup\windows.ps1`, e.g. `powershell -ExecutionPolicy Bypass -File setup\windows.ps1 --report`.
 
 Every command takes `--port`: `auto` (default), `ble` or `ble:<address>`, `/dev/ttyUSB0`, `COM3`, `/dev/rfcomm0`, `socket://<ip>:<port>`, or `DEMO`.
@@ -100,6 +102,7 @@ The log summary line reports link quality: how many requests were retried becaus
 | Path | What |
 |---|---|
 | `scan.py` | The command line: report, codes, misfires, monitors, supported, info, Honda probe, read-only query, logging |
+| `android/` | The Android app: the same reads, logging with a MARK button, and summaries on a phone. Build: [android/README.md](android/README.md) |
 | `tui.py` | The terminal UI (Textual) over the same layers: connect, health, live + CSV log, Mode 06, info, console, log summaries |
 | `summarize.py` | A drive log's timeline, warm-up, charging, trims by condition (coasting apart), bank difference, long-term trim changes, VCM, markers |
 | `scanner/` | The library the three commands use |

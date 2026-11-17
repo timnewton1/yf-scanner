@@ -19,8 +19,6 @@ Read-only except "Clear codes", same as scan.py. Needs textual (uv sync, or setu
 
 import argparse
 import os
-import subprocess
-import sys
 import threading
 import time
 from collections import deque
@@ -35,15 +33,23 @@ from textual.screen import ModalScreen
 from textual.widgets import (Button, DataTable, Footer, Header, Input, Label, RichLog, Select, Sparkline, Static,
                              Switch, TabbedContent, TabPane)
 
-from scanner import elm, honda, logger
+import summarize
+from scanner import elm, logger, report
 from scanner.car import READ_ONLY_SERVICES, Car
 from scanner.elm import NotConnected
-from scanner.elm.session import nrc_text
-from scanner.obd2 import dtc, monitors, pids
-from scan import REPORT_LIVE, fmt
+from scanner.obd2 import monitors
+from scanner.report import fmt
 
 SPARKS = [("RPM", "rpm"), ("SPEED", "mph"), ("COOLANT_TEMP", "coolant F"), ("ENGINE_LOAD", "load %")]
 HISTORY = 120  # rows of sparkline history
+TONE_STYLE = {"good": "green", "warn": "yellow", "bad": "bold red", "dim": "dim", "": ""}
+
+
+def styled(section, t):
+    """Append a scanner/report.py section to a rich Text."""
+    t.append(f"\n{section.title}\n", style="bold underline")
+    for text, tone, indent in section.lines:
+        t.append("  " * indent + text + "\n", style=TONE_STYLE.get(tone, ""))
 
 
 def err_text(e):
@@ -470,94 +476,9 @@ class YfTui(App):
             return
         self.status("Reading codes, readiness, misfires, Mode 06 and live values...")
         t = Text()
-        h = lambda s: t.append(f"\n{s}\n", style="bold underline")
         try:
             with self.lock:
-                car = self.car
-                h("Codes and readiness")
-                for addr, m in car.modules.items():
-                    st = car.status(addr)
-                    t.append(f"{m.name} ({addr:02X}): ", style="bold")
-                    if st is None:
-                        t.append("status (PID 01 01): no answer\n", style="yellow")
-                    else:
-                        if addr == car.engine:
-                            t.append("check engine light ")
-                            t.append("ON" if st.mil else "off", style="bold red" if st.mil else "green")
-                            t.append(", ")
-                        t.append(f"{st.count} code(s) counted\n")
-                    for kind in ("stored", "pending", "permanent"):
-                        codes = car.codes(addr, kind)
-                        if codes is None:
-                            t.append(f"  {kind}: no answer\n", style="yellow")
-                        elif not codes:
-                            t.append(f"  {kind}: none\n", style="dim")
-                        else:
-                            t.append(f"  {dtc.MODES[kind][1]}:\n")
-                            for c in codes:
-                                t.append(f"    {c}", style="bold red")
-                                t.append(f"  {dtc.describe(c)}\n")
-                    if st is not None and st.monitors:
-                        t.append("  readiness (an emissions test needs these complete):\n")
-                        for name, ok in st.monitors:
-                            t.append("    complete    " if ok else "    INCOMPLETE  ", style="green" if ok else "bold yellow")
-                            t.append(name + "\n")
-                extra = car.read(["DISTANCE_SINCE_DTC_CLEAR", "WARMUPS_SINCE_DTC_CLEAR", "DISTANCE_W_MIL"])
-                for name, v in extra.items():
-                    if v is not None:
-                        unit = "" if name == "WARMUPS_SINCE_DTC_CLEAR" else " mi"
-                        t.append(f"{pids.BY_NAME[name].desc}: {fmt(v)}{unit}\n", style="dim")
-
-                h("Misfires (Mode 06; Honda numbering 1-3 rear bank, 4-6 front bank, unverified)")
-                mf = car.misfires()
-                if not mf:
-                    t.append("  The engine module didn't answer the misfire monitors. Some cars only fill these "
-                             "after a full drive cycle.\n", style="yellow")
-                else:
-                    counts = {c: (mf[c].get("this / last drive cycle") or 0) for c in mf}
-                    top = max(counts.values()) or 1
-                    for cyl in range(1, 7):
-                        if cyl not in mf:
-                            t.append(f"  cyl {cyl}: no answer\n", style="yellow")
-                            continue
-                        cur, avg = mf[cyl].get("this / last drive cycle"), mf[cyl].get("average (last 10 drive cycles)")
-                        bar = "#" * round(20 * (cur or 0) / top) if counts[cyl] else ""
-                        t.append(f"  cyl {cyl}: this/last {fmt(cur):>6}  10-drive avg {fmt(avg):>6}  ")
-                        t.append(bar + "\n", style="red")
-                    if max(counts.values()) > 0:
-                        worst = max(counts, key=counts.get)
-                        t.append(f"  Highest: cylinder {worst}. Uneven counts on one cylinder are worth following up "
-                                 "(plug, coil, injector).\n", style="italic")
-
-                h("Mode 06 tests outside their limits")
-                bad = 0
-                for mid in sorted(car.mids()):
-                    for test in car.monitor(mid) or []:
-                        if not test.passed:
-                            bad += 1
-                            t.append(f"  {monitors.mid_name(mid)} {test.name}: {fmt(test.value)} {test.unit} "
-                                     f"(limits {fmt(test.min)}..{fmt(test.max)}) FAIL\n", style="bold red")
-                if not bad:
-                    t.append("  none: every result is within the limits the engine computer set for it\n", style="green")
-
-                h("Live values (one snapshot)")
-                v = car.read(REPORT_LIVE)
-                for n in REPORT_LIVE:
-                    if v[n] is not None:
-                        t.append(f"  {pids.BY_NAME[n].label:16} {fmt(v[n])}\n")
-                for b in ("1", "2"):
-                    s, lt = v.get(f"SHORT_FUEL_TRIM_{b}"), v.get(f"LONG_FUEL_TRIM_{b}")
-                    if s is not None and lt is not None:
-                        tot = s + lt
-                        t.append(f"  bank {b} total trim {tot:+.1f} %", style="yellow" if abs(tot) > 10 else "")
-                        t.append("  (sustained beyond about +/-10 % is worth a look; one snapshot isn't sustained)\n",
-                                 style="dim")
-
-                if car.elm.is_29bit:
-                    h("Honda reads (candidate decodes, cross-check before trusting)")
-                    for cand in honda.CANDIDATES:
-                        val, p, refused = car.honda(cand)
-                        t.append(f"  {cand['label']:28} {fmt(val) if refused is None else nrc_text(refused)}\n")
+                report.health(self.car, lambda s: styled(s, t))
         except Exception as e:
             t.append(f"\nStopped: {err_text(e)}\n", style="bold red")
             self.status(f"Health check stopped: {err_text(e)}", "error")
@@ -769,22 +690,8 @@ class YfTui(App):
         t = Text()
         try:
             with self.lock:
-                car = self.car
-                t.append("VIN: ", style="bold")
-                t.append(f"{car.vin() or '(no answer)'}\n\n")
-                for addr, m in car.modules.items():
-                    name, cals = car.identity(addr)
-                    t.append(f"{addr:02X} {name or m.name}", style="bold")
-                    t.append(f"   calibration {', '.join(cals)}\n" if cals else "\n")
-                    t.append(f"  {len(m.pids)} Mode 01 PIDs:\n")
-                    for p in sorted(m.pids):
-                        known = pids.BY_PID.get(p)
-                        names = ", ".join(x.name for x in known) if known else pids.SPECIAL.get(p, "(not in yf's PID table)")
-                        t.append(f"    {p:02X}  {names}\n", style="" if known else "dim")
-                    t.append("\n")
-                locs = car.o2_locations()
-                if locs:
-                    t.append(f"O2 sensors fitted (PID 13): {', '.join(locs)}\n")
+                for s in (report.vehicle(self.car), report.supported(self.car)):
+                    styled(s, t)
         except Exception as e:
             t.append(f"\nStopped: {err_text(e)}\n", style="bold red")
         self.ui(self.query_one("#infoout", Static).update, t)
@@ -813,27 +720,16 @@ class YfTui(App):
         w = lambda s: self.call_from_thread(out.write, s)
         try:
             with self.lock:
-                addr = self.car.module(module)
-                if addr is None:
-                    w(f"No module '{module}' answered.")
-                    return
-                r = self.car.query(hexreq, addr)
+                s = report.query(self.car, hexreq, module)
         except ValueError as e:
             w(f"refused: {e}")
             return
         except Exception as e:
             w(f"error: {err_text(e)}")
             return
-        w(f"> {hexreq.upper()} to {addr:02X} {honda.module_name(addr)}")
-        for ln in r.lines:
-            w(f"  < {ln}")
-        p = r.get(addr)
-        if p is None:
-            w(f"  {addr:02X}: {r.status or 'no answer'}" + (" (frames missing)" if addr in r.broken else ""))
-        elif p[0] == 0x7F:
-            w(f"  {addr:02X}: {nrc_text(p[2]) if len(p) > 2 else p.hex(' ')}")
-        else:
-            w(f"  {addr:02X}: {len(p)} bytes: {p.hex(' ').upper()}")
+        w(f"> {s.title}")
+        for text, _, indent in s.lines:
+            w("  " * indent + text)
 
     # --- 7 logs ---------------------------------------------------------------------
 
@@ -859,10 +755,8 @@ class YfTui(App):
 
     @work(thread=True, exclusive=True, group="summary")
     def summarize(self, path):
-        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "summarize.py")
         try:
-            r = subprocess.run([sys.executable, script, path], capture_output=True, text=True, timeout=60)
-            text = r.stdout + (f"\n{r.stderr}" if r.returncode else "")
+            text = summarize.summarize(path)
         except Exception as e:
             text = f"Couldn't summarize: {err_text(e)}"
         self.ui(self.query_one("#summaryout", Static).update, Text(text))

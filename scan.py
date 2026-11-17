@@ -26,10 +26,9 @@ The first adapter that answers is saved in .adapter (gitignored), so after that 
 import argparse
 import sys
 
-from scanner import elm, honda, logger
+from scanner import elm, logger, report
 from scanner.car import READ_ONLY_SERVICES, Car, ElmError
-from scanner.elm.session import nrc_text
-from scanner.obd2 import dtc, monitors, pids
+from scanner.obd2 import pids
 
 
 # --- connection -----------------------------------------------------------------
@@ -76,195 +75,30 @@ def show_adapters():
         print(f"Saved adapter (used by default): {elm.saved()}  (--forget-adapter to drop it)")
 
 
-# --- codes and readiness ----------------------------------------------------------
+# --- reads: each is a section from scanner/report.py, printed ----------------------
 
-def show_codes(car):
-    for addr, m in car.modules.items():
-        st = car.status(addr)
-        head = f"{m.name} ({addr:02X})"
-        if st is None:
-            print(f"{head}: status (PID 01 01): no answer")
-        else:
-            light = f"check engine light {'ON' if st.mil else 'off'}, " if addr == car.engine else ""
-            print(f"{head}: {light}{st.count} code(s) counted")
-        for kind in ("stored", "pending", "permanent"):
-            codes = car.codes(addr, kind)
-            if codes is None:
-                print(f"  {kind}: no answer")
-            elif not codes:
-                print(f"  {kind}: none")
-            else:
-                print(f"  {dtc.MODES[kind][1]}:")
-                for c in codes:
-                    print(f"    {c}  {dtc.describe(c)}")
-        if st is not None and st.monitors:
-            print("  readiness monitors (an emissions test needs these complete):")
-            for name, ok in st.monitors:
-                print(f"    {'complete  ' if ok else 'INCOMPLETE'}  {name}")
-    extra = car.read(["DISTANCE_SINCE_DTC_CLEAR", "WARMUPS_SINCE_DTC_CLEAR", "DISTANCE_W_MIL"])
-    units = {"DISTANCE_SINCE_DTC_CLEAR": " mi", "DISTANCE_W_MIL": " mi", "WARMUPS_SINCE_DTC_CLEAR": ""}
-    for name, v in extra.items():
-        if v is not None:
-            print(f"{pids.BY_NAME[name].desc}: {fmt(v)}{units[name]}")
+def show(section):
+    print(section.text(title=False))
 
 
 def clear_codes(car):
-    print("Clearing codes also resets every readiness monitor and the learned fuel trims.\n"
-          "The car will FAIL an emissions test until the monitors complete again (days of driving).\n"
-          "Permanent codes stay until the car confirms the fix itself. Key ON, engine OFF.")
+    print(report.CLEAR_WARNING)
     if input("Type 'clear' to go ahead: ").strip().lower() != "clear":
         print("Not cleared.")
         return
-    ok = car.clear_codes()
-    names = ", ".join(car.modules[a].name if a in car.modules else f"{a:02X}" for a in sorted(ok))
-    print(f"Sent. Confirmed by: {names or 'nobody (run --codes to check)'}. Run --codes to see what's left.")
+    show(report.clear_codes(car))
 
 
-# --- supported, misfires, monitors, info --------------------------------------------
+def health(car):
+    for s in report.health(car):
+        print(f"\n{s.text()}")
 
-def show_supported(car):
-    for addr, m in car.modules.items():
-        print(f"{m.name} ({addr:02X}): {len(m.pids)} Mode 01 PIDs")
-        for p in sorted(m.pids):
-            known = pids.BY_PID.get(p)
-            names = ", ".join(x.name for x in known) if known else pids.SPECIAL.get(p, "(not in yf's PID table)")
-            print(f"  {p:02X}  {names}")
-    locs = car.o2_locations()
-    if locs:
-        print(f"O2 sensors fitted (PID 13): {', '.join(locs)}")
-
-
-def show_misfires(car):
-    m = car.misfires()
-    print("Mode 06 misfire counters, engine module (Honda numbering: 1-3 rear bank, 4-6 front bank (unverified)):")
-    if not m:
-        print("  The engine module didn't answer the misfire monitors. Some cars only fill these after a full drive cycle.")
-        return
-    for cyl in range(1, 7):
-        if cyl not in m:
-            print(f"  cyl {cyl}: no answer")
-            continue
-        cur = m[cyl].get("this / last drive cycle")
-        avg = m[cyl].get("average (last 10 drive cycles)")
-        print(f"  cyl {cyl}: this / last drive {fmt(cur):>6}    10-drive average {fmt(avg):>6}")
-    counts = [m[c].get("this / last drive cycle") or 0 for c in m]
-    if counts and max(counts) > 0:
-        worst = max(m, key=lambda c: m[c].get("this / last drive cycle") or 0)
-        print(f"  Highest: cylinder {worst}. Uneven counts on one cylinder are worth following up (plug, coil, injector).")
-
-
-def fmt(v):
-    return "-" if v is None else (f"{v:g}" if isinstance(v, float) else str(v))
-
-
-def show_monitors(car, failed_only=False):
-    mids = sorted(car.mids())
-    if not mids:
-        print("No Mode 06 monitors answered.")
-        return 0
-    bad = 0
-    for mid in mids:
-        tests = car.monitor(mid)
-        if tests is None:
-            if not failed_only:
-                print(f"  {monitors.mid_name(mid)}: no answer")
-            continue
-        for t in tests:
-            ok = t.passed
-            bad += not ok
-            if failed_only and ok:
-                continue
-            print(f"  {monitors.mid_name(mid):24} {t.name:30} {fmt(t.value):>9} {t.unit:12} "
-                  f"limits {fmt(t.min)}..{fmt(t.max)}  {'pass' if ok else 'FAIL'}")
-    return bad
-
-
-def show_info(car):
-    print(f"VIN: {car.vin() or '(no answer)'}")
-    for addr, m in car.modules.items():
-        name, cals = car.identity(addr)
-        print(f"{addr:02X}: {name or m.name}" + (f"   calibration {', '.join(cals)}" if cals else ""))
-
-
-# --- Honda ------------------------------------------------------------------------
-
-def honda_probe(car):
-    print("Honda enhanced candidates (read-only Mode 22). Raw bytes shown so the decode can be checked.")
-    if not car.elm.is_29bit:
-        print("Not on 29-bit CAN, where the Pilot's modules answer Honda reads. Try without --protocol.")
-        return
-    for cand in honda.CANDIDATES:
-        addr = cand["module"]
-        v, p, refused = car.honda(cand)
-        tag = f"{cand['name']} ({cand['request'].hex().upper()} to {addr:02X} {honda.module_name(addr)})"
-        if p is None:
-            print(f"  {tag}: no answer")
-            continue
-        print(f"  {tag}: {len(p)} bytes: {p.hex(' ').upper()}")
-        if refused is not None:
-            print(f"    refused, {nrc_text(refused)}")
-            continue
-        data = honda.payload(p, cand["request"])
-        if data is None:
-            print("    not a positive reply to this request (a different 62 xx xx echo means the adapter "
-                  "answered the wrong request, a known cheap-clone fault)")
-            continue
-        i = honda.torque_index(cand["byte"])
-        print(f"    {len(data)} data bytes; byte {cand['byte']} (index {i}) -> {fmt(v)} {cand['label']}")
-
-
-# --- report -----------------------------------------------------------------------
-
-REPORT_LIVE = ["RPM", "SPEED", "COOLANT_TEMP", "INTAKE_TEMP", "ENGINE_LOAD", "MAF", "FUEL_STATUS",
-               "SHORT_FUEL_TRIM_1", "LONG_FUEL_TRIM_1", "SHORT_FUEL_TRIM_2", "LONG_FUEL_TRIM_2",
-               "CONTROL_MODULE_VOLTAGE", "FUEL_LEVEL"]
-
-
-def report(car):
-    print("\n== Codes and readiness ==")
-    show_codes(car)
-    print("\n== Misfires ==")
-    show_misfires(car)
-    print("\n== Mode 06 tests outside their limits ==")
-    bad = show_monitors(car, failed_only=True)
-    if bad == 0:
-        print("  none: every test result is within the limits the engine computer set for it")
-    print("\n== Live values (one snapshot) ==")
-    v = car.read(REPORT_LIVE)
-    for n in REPORT_LIVE:
-        if v[n] is not None:
-            print(f"  {pids.BY_NAME[n].label:16} {fmt(v[n])}")
-    for b in ("1", "2"):
-        s, lt = v.get(f"SHORT_FUEL_TRIM_{b}"), v.get(f"LONG_FUEL_TRIM_{b}")
-        if s is not None and lt is not None:
-            print(f"  bank {b} total trim {s + lt:+.1f} %  (sustained beyond about +/-10 % is worth a look; "
-                  "one snapshot isn't sustained)")
-    if car.elm.is_29bit:
-        print("\n== Honda reads (candidate decodes, cross-check before trusting) ==")
-        for cand in honda.CANDIDATES:
-            val, p, refused = car.honda(cand)
-            print(f"  {cand['label']:28} {fmt(val) if refused is None else nrc_text(refused)}")
-
-
-# --- raw read-only query ----------------------------------------------------------
 
 def query(car, hexreq, module):
-    addr = car.module(module)
-    if addr is None:
-        sys.exit(f"No module '{module}' answered.")
     try:
-        r = car.query(hexreq, addr)
+        show(report.query(car, hexreq, module))
     except ValueError as e:
         sys.exit(str(e))
-    for ln in r.lines:
-        print(f"  < {ln}")
-    p = r.get(addr)
-    if p is None:
-        print(f"  {addr:02X}: {r.status or 'no answer'}" + (" (frames missing)" if addr in r.broken else ""))
-    elif p[0] == 0x7F:
-        print(f"  {addr:02X}: {nrc_text(p[2]) if len(p) > 2 else p.hex(' ')}")
-    else:
-        print(f"  {addr:02X}: {len(p)} bytes: {p.hex(' ').upper()}")
 
 
 # --- main -------------------------------------------------------------------------
@@ -336,17 +170,17 @@ def main(argv=None):
         if args.clear_codes:
             clear_codes(car)
         elif args.report:
-            report(car)
+            health(car)
         elif args.codes:
-            show_codes(car)
+            show(report.codes(car))
         elif args.supported:
-            show_supported(car)
+            show(report.supported(car))
         elif args.misfires:
-            show_misfires(car)
+            show(report.misfires(car))
         elif args.monitors:
-            show_monitors(car)
+            show(report.mode06(car)[0])
         elif args.info:
-            show_info(car)
+            show(report.vehicle(car))
         elif args.modules:
             if args.sweep:
                 print("Sweeping every address with a read-only 01 00 (about 40 s)...")
@@ -355,7 +189,7 @@ def main(argv=None):
                 name, _ = car.identity(a)
                 print(f"  {a:02X}  {m.name:20} {name or '':20} {len(m.pids)} Mode 01 PIDs")
         elif args.honda_probe:
-            honda_probe(car)
+            show(report.honda_probe(car))
         elif args.query:
             query(car, args.query, args.module)
         else:

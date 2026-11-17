@@ -41,9 +41,13 @@ class Car:
     def open(cls, port="auto", timeout=1.0, protocol=None, baud=None, log=None):
         """Connect and discover modules. Raises elm.adapter.NotConnected if no adapter answers;
         check .connected for the car."""
-        ad = elm.connect(port, timeout=timeout, protocol=protocol, baud=baud, log=log)
-        car = cls(ad)
-        if ad.car:
+        return cls.start(elm.connect(port, timeout=timeout, protocol=protocol, baud=baud, log=log))
+
+    @classmethod
+    def start(cls, adapter):
+        """A Car on an adapter that's already open (elm.connect or elm.connect_port)."""
+        car = cls(adapter)
+        if adapter.car:
             car.discover()
         return car
 

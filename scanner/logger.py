@@ -211,11 +211,16 @@ def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, dir
         pass
     finally:
         log.close()
-        secs = time.monotonic() - log.t0
-        st = lg.car.elm.stats
-        print(f"\nSaved {log.path}: {log.rows} rows in {secs:.0f} s ({log.rows / max(secs, 1e-3):.2f} rows/s); "
-              f"link: {st['requests']} requests, {st['retries']} retried for missing frames, {st['timeouts']} timeouts")
+        print("\n" + saved_line(log, lg.car))
         lg.car.close()
+
+
+def saved_line(log, car):
+    """How a finished log went: rows, rate, and the link's retries and timeouts."""
+    secs = time.monotonic() - log.t0
+    st = car.elm.stats
+    return (f"Saved {log.path}: {log.rows} rows in {secs:.0f} s ({log.rows / max(secs, 1e-3):.2f} rows/s); "
+            f"link: {st['requests']} requests, {st['retries']} retried for missing frames, {st['timeouts']} timeouts")
 
 
 def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", idle_stop=20.0,

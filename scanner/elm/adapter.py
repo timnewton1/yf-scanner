@@ -11,7 +11,11 @@ import sys
 import time
 
 import serial
-from serial.tools import list_ports
+
+try:
+    from serial.tools import list_ports
+except ImportError:  # Android (sys.platform 'android', the phone app): no serial ports; BLE is BleLink.kt
+    list_ports = None
 
 from . import ble
 from .session import Elm, ElmError
@@ -241,6 +245,25 @@ def _connect(port, timeout, protocol, baud, log, car):
             sp = open_port(url, baud)
     except serial.SerialException as e:
         raise NotConnected(ble.last_error or f"{e}. {help_for(url)}") from e
+    return _session(url, sp, lambda: open_port(url, baud), timeout, protocol, log, car,
+                    link=lambda port: ble.last_link if kind(url) == "BLE" else None)
+
+
+def connect_port(url, open_port, timeout=1.0, protocol=None, log=None, car=True):
+    """Start a session on a port the caller opens: the phone app's BLE link (phone.py).
+    open_port() -> an open pyserial-style port with an info() list; it's called once more if a BLE
+    link drops right after connecting. url names the link ('ble://<address>') for kind() and messages.
+    Nothing is saved: the app remembers its own adapter."""
+    try:
+        sp = open_port()
+    except (OSError, serial.SerialException) as e:
+        raise NotConnected(str(e)) from e
+    return _session(url, sp, open_port, timeout, protocol, log, car, link=lambda port: port)
+
+
+def _session(url, sp, reopen, timeout, protocol, log, car, link):
+    """ATZ and setup on an open port. BLE links get one more go if they drop right after connecting.
+    link(port) -> what Adapter.link holds: the object whose info() describes the link."""
     elm = Elm(sp, timeout=timeout, log=log)
     try:
         elm.reset()
@@ -251,13 +274,13 @@ def _connect(port, timeout, protocol, baud, log, car):
         # BLE links on the reference adapter sometimes drop right after connecting: one more go
         time.sleep(2)
         try:
-            sp = open_port(url, baud)
+            sp = reopen()
             elm = Elm(sp, timeout=timeout, log=log)
             elm.reset()
-        except (ElmError, serial.SerialException) as e2:
+        except (ElmError, NotConnected, OSError, serial.SerialException) as e2:
             elm.close()
             raise NotConnected(f"{ble.last_error or e2}. {help_for(url)}") from e2
-    ad = Adapter(url, elm, ble.last_link if kind(url) == "BLE" else None)
+    ad = Adapter(url, elm, link(elm.port))
     if car:
         ad.car = elm.setup(protocol)
     identify(ad)
@@ -347,7 +370,7 @@ def find_adapters(ble_seconds=6.0):
     Returns [(port to pass, kind, description)]. ble_seconds=0 skips the BLE scan."""
     out = []
     seen = set()
-    for p in list_ports.comports():
+    for p in list_ports.comports() if list_ports else []:
         builtin = p.vid is None and "rfcomm" not in p.device and "USB" not in p.device.upper()
         if builtin and not (sys.platform == "win32" and "bluetooth" in (p.description or "").lower()):
             continue  # built-in UARTs (ttyS*) are never the adapter; Windows lists BT Classic SPP as COM ports
