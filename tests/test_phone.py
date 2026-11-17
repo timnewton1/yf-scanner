@@ -1,7 +1,13 @@
 """scanner/phone.py, the phone app's bridge, with fakes for the Kotlin side: a Link that is the
 simulated adapter (what BleLink.kt is on the car) and the hooks the app passes. Connect, health,
-a query and a refused write, a drive log with a marker and a dropped link, the summary."""
+a query and a refused write, a drive log with a marker and a dropped link, the summary.
 
+The fakes behave the way Chaquopy hands Kotlin to Python, not like plain Python objects: a Kotlin
+List is a java.util.ArrayList Python can't iterate, a ByteArray is signed bytes, exceptions are
+Java ones whose str() is the class name, and a None or a wrong type for a Kotlin parameter is an
+error (any such call fails the test, even where phone.py swallows the exception)."""
+
+import array
 import json
 import os
 import sys
@@ -18,21 +24,66 @@ import serial  # noqa: E402
 from scanner import phone  # noqa: E402
 
 
+VIOLATIONS = []  # calls into "Kotlin" that the real app would have refused
+
+
+class JavaException(Exception):
+    """A Java exception as Chaquopy raises it: str() gives the class name first, getMessage() the text."""
+
+    def __init__(self, cls, message):
+        super().__init__(f"{cls}: {message}")
+        self._message = message
+
+    def getMessage(self):
+        return self._message
+
+
+def kotlin(*types):
+    """A Kotlin method's parameter types, enforced as on the phone: None for a non-null parameter is
+    a NullPointerException, a Python value with no conversion is a TypeError (no overload matches)."""
+    def wrap(f):
+        def call(self, *args):
+            bad = None
+            if len(args) != len(types):
+                bad = f"{f.__name__}: {len(args)} arguments, Kotlin takes {len(types)}"
+            for a, t in zip(args, types):
+                if a is None:
+                    bad = bad or f"{f.__name__}: None for a non-null {t}"
+                elif not isinstance(a, t) or (t is int and isinstance(a, bool)):
+                    bad = bad or f"{f.__name__}: {type(a).__name__} for {t}"
+            if bad:
+                VIOLATIONS.append(bad)
+                raise TypeError(bad)
+            return f(self, *args)
+        call.__name__ = f.__name__
+        return call
+    return wrap
+
+
+def check_kotlin_calls(test):
+    seen = VIOLATIONS[:]
+    VIOLATIONS.clear()
+    test.assertEqual(seen, [], "phone.py called Kotlin with arguments the app would refuse")
+
+
 class FakeLink:
-    """BleLink.kt's interface over the simulator: write(bytes), read(ms) -> bytes, resetInput, close, info."""
+    """BleLink.kt's interface over the simulator: write(ByteArray), read(Long) -> ByteArray, resetInput,
+    close, info() -> List<String>."""
 
     def __init__(self):
         self.port = serial.serial_for_url("sim://pilot?latency=0")
         self.closed = False
 
+    @kotlin((bytes, bytearray))
     def write(self, data):
         if self.port.broken:
-            raise RuntimeError("BLE link dropped")
+            raise JavaException("yf.scanner.app.LinkException", "BLE link dropped")
         self.port.write(data)
 
+    @kotlin(int)
     def read(self, ms):
         self.port.timeout = ms / 1000
-        return self.port.read(self.port.in_waiting or 1)
+        return array.array("b", self.port.read(self.port.in_waiting or 1))  # a Java byte[] is signed
 
     def resetInput(self):
         self.port.reset_input_buffer()
@@ -65,21 +116,26 @@ class Hooks:
         self.stop = threading.Event()
         self.on_row = None
 
+    @kotlin(str)
     def openLink(self, address):
         self.links.append(FakeLink())
         return self.links[-1]
 
+    @kotlin(str, str)
     def traffic(self, d, t):
         self.seen.append(f"{d} {t}")
 
+    @kotlin(str)
     def section(self, js):
         self.sections.append(json.loads(js))
 
+    @kotlin(str)
     def row(self, js):
         self.rows.append(json.loads(js))
         if self.on_row:
             self.on_row(self.rows[-1])
 
+    @kotlin(str)
     def status(self, text):
         self.statuses.append(text)
 
@@ -102,6 +158,7 @@ class TestPhone(unittest.TestCase):
 
     def tearDown(self):
         phone.disconnect()
+        check_kotlin_calls(self)
 
     def test_hello(self):
         h = json.loads(phone.hello())
@@ -154,11 +211,15 @@ class TestPhone(unittest.TestCase):
             text = phone.summary(prep["path"])
             self.assertIn("'whine' at", text)
             self.assertIn("Link: 1 drop(s)", text)
+            lost = [s for s in self.h.statuses if s.startswith("Link lost")]
+            self.assertIn("BLE link dropped", lost[0])
+            self.assertNotIn("LinkException", lost[0])  # getMessage(), not the Java class name
 
 
 class TestConnectFails(unittest.TestCase):
     def tearDown(self):
         phone.disconnect()
+        check_kotlin_calls(self)
 
     def test_app_bug_after_link_opens_closes_the_link_and_says_bug(self):
         h = Hooks()
@@ -186,11 +247,11 @@ class TestHooksThatThrow(unittest.TestCase):
         class Throwing(Hooks):
             def row(self, js):
                 super().row(js)
-                raise RuntimeError("SecurityException: posting a notification")
+                raise JavaException("java.lang.SecurityException", "posting a notification")
 
             def section(self, js):
                 super().section(js)
-                raise RuntimeError("JSONException")
+                raise JavaException("org.json.JSONException", "Value None of type java.lang.String")
         self.h = Throwing()
         self.assertTrue(json.loads(phone.connect("DEMO", self.h))["ok"])
         self.printed = mock.patch.object(phone.traceback, "print_exc").start()
@@ -199,6 +260,7 @@ class TestHooksThatThrow(unittest.TestCase):
 
     def tearDown(self):
         phone.disconnect()
+        check_kotlin_calls(self)
 
     def test_read_returns_every_section(self):
         out = json.loads(phone.run("health"))
