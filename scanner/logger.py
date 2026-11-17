@@ -7,7 +7,9 @@ Read-only: only Mode 01 and the Honda Mode 22 candidates are requested.
 import csv
 import datetime
 import os
+import platform
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -61,15 +63,73 @@ def label(name):
     return pids.BY_NAME[name].label
 
 
+# --- what a log was taken with ------------------------------------------------------
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def computer():
+    """The OS (and phone or board) this runs on, in a few words."""
+    if sys.platform == "android":
+        try:
+            a = platform.android_ver()
+            return (f"Android {a.release} (API {a.api_level}), {a.manufacturer} {a.model}"
+                    + (", emulator" if a.is_emulator else ""))
+        except Exception:
+            return "Android"
+    system, release, machine = platform.system(), platform.release(), platform.machine()
+    if system == "Linux":
+        try:
+            name = platform.freedesktop_os_release().get("PRETTY_NAME", "Linux")
+        except OSError:
+            name = "Linux"
+        extra = [f"kernel {release}", machine]
+        if "microsoft" in release.lower():
+            extra.append("WSL")
+        try:
+            with open("/proc/device-tree/model", encoding="utf-8", errors="replace") as f:
+                extra.append(f.read().strip("\x00\n "))  # Raspberry Pi 4 Model B Rev 1.4
+        except OSError:
+            pass
+        return f"{name} ({', '.join(extra)})"
+    if system == "Darwin":
+        return f"macOS {platform.mac_ver()[0]} ({machine})"
+    if system == "Windows":
+        return f"Windows {release} ({platform.version()}, {machine})"
+    return f"{system} {release} ({machine})"
+
+
+def scanner_version():
+    """The repo's commit (git describe), or None where there's no git (the phone)."""
+    if not os.path.isdir(os.path.join(REPO, ".git")):
+        return None
+    try:
+        r = subprocess.run(["git", "-C", REPO, "describe", "--always", "--dirty"], capture_output=True,
+                           text=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
 class CsvLog:
-    def __init__(self, names, tag, directory=None):
+    """One drive log. Lines starting with # are run info: before the column header (what the log
+    was taken with) and one at the end (how it went); summarize.py reads and skips them."""
+
+    def __init__(self, names, tag, directory=None, info=None, demo=False):
+        """info: [(key, value)] written as '# key: value' before the header. demo: the simulator,
+        so the file name ends in _DEMO."""
         directory = directory or LOG_DIR
         os.makedirs(directory, exist_ok=True)
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.path = os.path.join(directory, f"yf_{stamp}{'_' + tag if tag else ''}.csv")
+        suffix = (f"_{tag}" if tag else "") + ("_DEMO" if demo else "")
+        self.path = os.path.join(directory, f"yf_{stamp}{suffix}.csv")
         self.names = names
         self.file = open(self.path, "w", newline="", encoding="utf-8")
         self.writer = csv.writer(self.file)
+        for k, v in info or []:
+            self._comment(f"{k}: {v}")
         self.writer.writerow(["time", "elapsed_s", "marker"] + [label(n) for n in names])
         self.t0 = time.monotonic()
         self.rows = 0
@@ -83,7 +143,19 @@ class CsvLog:
         if self.rows % 10 == 0:
             os.fsync(self.file.fileno())  # a Pi losing power mid-drive keeps all but the last few seconds
 
-    def close(self):
+    @classmethod
+    def for_logger(cls, lg, tag, directory=None, front_end="scan.py", set_name=None):
+        """A log for Logger lg, headed with its run info."""
+        return cls(lg.columns, tag, directory, lg.run_info(front_end, set_name, tag), demo=lg.demo)
+
+    def _comment(self, text):
+        self.file.write("# " + " ".join(str(text).split()) + "\r\n")  # csv.writer's line ending
+
+    def close(self, car=None):
+        """car: also write how the log went (rows, rate, the link's retries) as the last line."""
+        if car is not None and not self.file.closed:
+            ended = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+            self._comment(f"ended: {ended}, {stats_line(self, car)}")
         self.file.close()
 
 
@@ -148,6 +220,48 @@ class Logger:
     @property
     def columns(self):
         return self.names + [c["name"] for c in self.extras]
+
+    @property
+    def demo(self):
+        ad = getattr(self.car, "adapter", None)
+        return getattr(ad, "kind", "") == "simulator"
+
+    def run_info(self, front_end, set_name=None, tag=None):
+        """[(key, value)] for the top of a log: when, real car or simulator, on what, through which
+        adapter, and what's logged how often. No VIN and no adapter address (logs get shared)."""
+        car, ad = self.car, getattr(self.car, "adapter", None)
+        ident = getattr(ad, "ident", {}) or {}
+        info = [
+            ("yf-scanner drive log", f"started {datetime.datetime.now().astimezone().isoformat(timespec='seconds')}"),
+            ("source", "SIMULATOR (DEMO), not a car" if self.demo else "real car"),
+            ("front end", front_end),
+            ("computer", computer()),
+            ("python", platform.python_version()),
+        ]
+        v = scanner_version()
+        if v:
+            info.append(("scanner", f"git {v}"))
+        if ad is not None:
+            info.append(("adapter", f"{ident.get('chip') or '?'} over {ad.kind}, type: {ident.get('type', '?')}"))
+            info += [("adapter note", n) for n in ident.get("notes", [])]
+        info.append(("car", f"{car.elm.protocol_name}; modules "
+                     + ", ".join(f"{a:02X} {m.name} ({len(m.pids)} PIDs)" for a, m in car.modules.items())))
+        m = car.modules.get(car.engine)
+        if m is not None and not m.batch:
+            info.append(("engine computer", "one PID per request (it missed multi-PID requests)"))
+        info.append(("set", f"{set_name or 'custom'} ({len(self.columns)} values), Honda reads "
+                     f"{'on' if self.extras else 'off'}, quick {'on' if self.quick else 'off'}"
+                     + (f", tag {tag}" if tag else "")))
+        if self.quick:
+            groups = {}
+            for n in self.columns:
+                groups.setdefault(quick_every(n), []).append(label(n))
+            for every in sorted(groups, key=lambda e: float("inf") if e is None else e):
+                when = "every row" if every == 0 else "once" if every is None else f"every {every:.0f} s"
+                info.append((f"quick, {when}", ", ".join(groups[every])))
+        if self.skipped:
+            info.append(("not answered, skipped", ", ".join(self.skipped)))
+        return info
 
     def row(self):
         """Read one row -> {column: value}. Quick mode returns only the columns it read, which can be
@@ -253,14 +367,15 @@ class Logger:
         return "time"
 
 
-def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, directory=None, quick=False):
+def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, directory=None, quick=False,
+          set_name=None):
     """Interactive drive log (the default command)."""
     lg = Logger(car, names, with_honda, reopen, quick=quick)
     if not lg.names:
         sys.exit("None of the requested PIDs are supported by the engine module.")
     if lg.skipped:
         print(f"Not answered by this engine computer, skipped: {', '.join(lg.skipped)}")
-    log = CsvLog(lg.columns, tag, directory)
+    log = CsvLog.for_logger(lg, tag, directory, "scan.py", set_name)
     markers = Markers()
     if sys.stdin.isatty():
         markers.from_stdin()
@@ -272,21 +387,25 @@ def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, dir
     except KeyboardInterrupt:
         pass
     finally:
-        log.close()
+        log.close(lg.car)
         print("\n" + saved_line(log, lg.car))
         lg.car.close()
 
 
-def saved_line(log, car):
-    """How a finished log went: rows, rate, and the link's retries and timeouts."""
+def stats_line(log, car):
+    """How a log went: rows, rate, and the link's retries and timeouts."""
     secs = time.monotonic() - log.t0
     st = car.elm.stats
-    return (f"Saved {log.path}: {log.rows} rows in {secs:.0f} s ({log.rows / max(secs, 1e-3):.2f} rows/s); "
+    return (f"{log.rows} rows in {secs:.0f} s ({log.rows / max(secs, 1e-3):.2f} rows/s); "
             f"link: {st['requests']} requests, {st['retries']} retried for missing frames, {st['timeouts']} timeouts")
 
 
+def saved_line(log, car):
+    return f"Saved {log.path}: {stats_line(log, car)}"
+
+
 def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", idle_stop=20.0,
-               directory=None, quick=False):
+               directory=None, quick=False, set_name=None):
     """For a Raspberry Pi in the car: wait for the adapter and a running engine, log the drive to
     its own file, close it when the engine has been off for idle_stop seconds, repeat. Never exits
     on its own; stop it with Ctrl+C or systemctl stop."""
@@ -317,7 +436,7 @@ def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", 
             time.sleep(10)
             continue
         lg = Logger(car, names, with_honda, reopen=open_car, quiet=True, quick=quick)
-        log = CsvLog(lg.columns, tag, directory)
+        log = CsvLog.for_logger(lg, tag, directory, "scan.py --unattended", set_name)
         say(f"engine running ({rpm:.0f} rpm): logging to {log.path}")
         off_since = [None]
 
@@ -331,7 +450,7 @@ def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", 
 
         markers.take()  # drop presses from before the drive
         why = lg.run(log, markers, stop_when=engine_off, link_patience=60)
-        log.close()
+        log.close(lg.car)
         say(f"closed {log.path} ({log.rows} rows, {why})")
         try:
             lg.car.close()

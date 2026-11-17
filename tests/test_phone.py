@@ -227,7 +227,11 @@ class TestPhone(unittest.TestCase):
             done = json.loads(phone.log_run())
             self.assertEqual(done["why"], "stopped")
             with open(prep["path"], encoding="utf-8") as f:
-                rows = list(csv.DictReader(f))
+                text = f.read()
+            rows = list(csv.DictReader(ln for ln in text.splitlines() if not ln.startswith("#")))
+            self.assertIn("# front end: Android app", text)
+            self.assertIn("# set: drive", text)
+            self.assertTrue(text.splitlines()[-1].startswith("# ended: "))
         self.assertTrue(all(r["cells"].get("COOLANT_TEMP") for r in self.h.rows))  # the tile keeps its value
         self.assertTrue(any(not r["coolant F"] for r in rows))  # the CSV says when it was read
 

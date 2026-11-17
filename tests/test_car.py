@@ -326,10 +326,33 @@ class TestCli(unittest.TestCase):
             files = os.listdir(d)
             self.assertEqual(len(files), 1, out)
             with open(os.path.join(d, files[0]), encoding="utf-8") as f:
-                rows = f.read().splitlines()
+                rows = [ln for ln in f.read().splitlines() if not ln.startswith("#")]
             self.assertTrue(rows[0].startswith("time,elapsed_s,marker,rpm,mph"))
             self.assertIn("ATF F (candidate)", rows[0])
             self.assertGreater(len(rows), 5)
+
+    def test_log_starts_with_run_info_and_ends_with_link_stats(self):
+        import summarize
+        with tempfile.TemporaryDirectory() as d:
+            run_cli("--port", DEMO, "--seconds", "1", "--quick", "--honda", "--tag", "t", "--log-dir", d)
+            name = os.listdir(d)[0]
+            self.assertTrue(name.endswith("_t_DEMO.csv"), name)
+            with open(os.path.join(d, name), encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            text = summarize.summarize(os.path.join(d, name))
+        head = [ln for ln in lines if ln.startswith("#")]
+        self.assertTrue(lines[0].startswith("# yf-scanner drive log: started 20"), lines[0])
+        for want in ("# source: SIMULATOR (DEMO), not a car", "# front end: scan.py", "# computer: ",
+                     "# adapter: ELM327 v1.5 over simulator", "# car: ISO 15765-4 CAN",
+                     "# set: drive (20 values), Honda reads on, quick on, tag t", "# quick, every row: rpm, mph"):
+            self.assertTrue(any(ln.startswith(want) for ln in head), (want, head))
+        header = next(i for i, ln in enumerate(lines) if not ln.startswith("#"))
+        self.assertTrue(lines[header].startswith("time,elapsed_s,marker,"))
+        self.assertTrue(lines[-1].startswith("# ended: "), lines[-1])
+        self.assertIn("retried for missing frames", lines[-1])
+        self.assertIn("Run info:\n  yf-scanner drive log", text)
+        self.assertIn("source: SIMULATOR (DEMO)", text)
+        self.assertNotIn("AA:BB", "\n".join(head))  # never the adapter's address
 
     def test_quick_log_is_faster(self):
         rates = {}
@@ -338,7 +361,7 @@ class TestCli(unittest.TestCase):
                 argv = ["--port", "sim://pilot?clean&latency=0.02", "--seconds", "1.5", "--honda", "--log-dir", d]
                 out = run_cli(*argv + (["--quick"] if quick else []))
                 with open(os.path.join(d, os.listdir(d)[0]), encoding="utf-8") as f:
-                    rates[quick] = len(f.read().splitlines()) - 1
+                    rates[quick] = len([ln for ln in f.read().splitlines() if not ln.startswith("#")]) - 1
                 if quick:
                     self.assertIn("quick:", out)
         self.assertGreater(rates[True], 1.8 * rates[False], rates)  # drive + Honda: 5 requests a row vs about 2.5

@@ -156,6 +156,7 @@ def main(argv=None):
         return
 
     names = [p.strip().upper() for p in args.pids.split(",")] if args.pids else logger.SETS[args.set]
+    set_name = "custom (--pids)" if args.pids else args.set
     unknown = [n for n in names if n not in pids.BY_NAME]
     if unknown:
         sys.exit(f"Not in the PID table: {', '.join(unknown)}. Known: {', '.join(sorted(pids.BY_NAME))}")
@@ -163,7 +164,7 @@ def main(argv=None):
     if args.unattended:
         try:
             logger.unattended(opener(args), names, args.honda, args.gpio_button, args.tag or "auto",
-                              directory=args.log_dir, quick=args.quick)
+                              directory=args.log_dir, quick=args.quick, set_name=set_name)
         except KeyboardInterrupt:
             pass
         return
@@ -197,7 +198,7 @@ def main(argv=None):
             query(car, args.query, args.module)
         else:
             logger.drive(car, names, args.seconds, args.tag, args.honda, reopen=opener(args), directory=args.log_dir,
-                         quick=args.quick)
+                         quick=args.quick, set_name=set_name)
             return  # drive() closes the car (it may have reconnected to a new one)
     except ElmError as e:
         sys.exit(f"Lost the adapter: {e}")

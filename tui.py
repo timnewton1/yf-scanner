@@ -69,16 +69,16 @@ class SwitchableLog:
         self.t0 = time.monotonic()
         self.rows = 0
 
-    def start(self, columns, tag, directory):
+    def start(self, lg, tag, directory, set_name):
         with self.lock:
-            self.csv = logger.CsvLog(columns, tag, directory)
+            self.csv = logger.CsvLog.for_logger(lg, tag, directory, "tui.py", set_name)
             return self.csv.path
 
-    def stop(self):
+    def stop(self, car=None):
         with self.lock:
             c, self.csv = self.csv, None
             if c:
-                c.close()
+                c.close(car)
             return c
 
     def write(self, cells, marker=""):
@@ -615,14 +615,14 @@ class YfTui(App):
             return
         tag = self.query_one("#tag", Input).value.strip().replace(" ", "-") or None
         self.markers.take()  # drop anything typed before recording
-        path = self.sink.start(self.lg.columns, tag, self.log_dir)
+        path = self.sink.start(self.lg, tag, self.log_dir, self.query_one("#pidset", Select).value)
         self.query_one("#rec-btn", Button).label = "Stop CSV"
         self.query_one("#rec-btn", Button).variant = "error"
         self.query_one("#marker", Input).disabled = False
         self.status(f"Recording to {path}. Press m (or type a word in Marker + Enter) when you hear something.")
 
     def stop_recording(self):
-        c = self.sink.stop()
+        c = self.sink.stop(self.lg.car if self.lg else None)
         b = self.query_one("#rec-btn", Button)
         b.label, b.variant = "Record CSV", "success"
         self.query_one("#marker", Input).disabled = True

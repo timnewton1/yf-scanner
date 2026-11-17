@@ -1,4 +1,4 @@
-"""Summarize a scan.py CSV: a timeline, warm-up, charging, fuel trims by driving condition (coasting
+"""Summarize a scan.py CSV: its run info (the # lines), a timeline, warm-up, charging, fuel trims by driving condition (coasting
 apart), how the long-term trims moved, and every noise marker.
 
     python3 summarize.py logs/yf_XXXX.csv [marker_window_seconds] [timeline_step_seconds]
@@ -33,7 +33,9 @@ def summarize(path, WIN=3.0, STEP=30.0, name=None):
     """The summary of one log, as text. name: what to call the file in the first line (default: path).
     Raises ValueError for an empty log."""
     with open(path, encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
+        lines = f.read().splitlines()
+    info = [ln[1:].strip() for ln in lines if ln.startswith("#")]  # run info, from logger.CsvLog
+    rows = list(csv.DictReader(ln for ln in lines if not ln.startswith("#")))
     if not rows:
         raise ValueError("empty log")
     out = []
@@ -47,6 +49,10 @@ def summarize(path, WIN=3.0, STEP=30.0, name=None):
     t = col("elapsed_s")
     data_rows = [r for r in rows if not is_link(r.get("marker", ""))]
     say(f"{path}\n{len(data_rows)} rows over {t[-1]:.0f} s ({len(data_rows) / max(t[-1], 1):.2f} rows/s)")
+    if info:
+        say("Run info:\n" + "\n".join(f"  {ln}" for ln in info))
+    else:
+        say("Run info: none (a log from before logs recorded it)")
     link = [r for r in rows if is_link(r.get("marker", ""))]
     if link:
         lost = sum(r["marker"].startswith("link lost") for r in link)

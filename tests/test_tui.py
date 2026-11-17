@@ -75,7 +75,9 @@ class TestTui(unittest.TestCase):
                 logs = [f for f in os.listdir(d) if f.endswith(".csv")]
                 self.assertEqual(len(logs), 1)
                 with open(os.path.join(d, logs[0]), encoding="utf-8") as f:
-                    rows = list(csv.DictReader(f))
+                    rows = list(csv.DictReader(ln for ln in f if not ln.startswith("#")))
+                    f.seek(0)
+                    self.assertIn("# front end: tui.py", f.read())
                 self.assertIn("mark1", [r["marker"] for r in rows])
                 data = [r for r in rows if not r["marker"].startswith(("timeout", "link"))]
                 self.assertTrue(all(r["rpm"] for r in data))

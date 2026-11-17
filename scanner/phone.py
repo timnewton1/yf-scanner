@@ -258,7 +258,7 @@ def log_prepare(set_name, with_honda, quick, tag, directory):
     lg = logger.Logger(_car, logger.SETS[set_name], bool(with_honda), reopen=_reopen, quiet=True, quick=bool(quick))
     if not lg.names:
         return _json(error="None of those PIDs are answered by the engine computer")
-    csv = _AppLog(lg.columns, tag.strip() or None, directory)
+    csv = _AppLog.for_logger(lg, tag.strip() or None, directory, "Android app", set_name)
     csv.shown = lg.latest
     _log = (lg, csv)
     tiles = [n for n in logger.LIVE_LINE if n in lg.columns] + [c["name"] for c in lg.extras]
@@ -277,7 +277,7 @@ def log_run():
     except Exception as e:
         why = f"error: {_msg(e)}"
     finally:
-        csv.close()
+        csv.close(lg.car)
         _log = None
     _car = lg.car  # it may have reconnected to a new session
     text = logger.saved_line(csv, lg.car).replace(csv.path, os.path.basename(csv.path))
