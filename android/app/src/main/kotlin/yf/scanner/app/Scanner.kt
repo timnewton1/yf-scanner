@@ -7,6 +7,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +51,7 @@ data class LogState(
 )
 
 object Scanner {
+    const val TAG = "yf"
     lateinit var ctx: Context
         private set
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "adapter") }.asCoroutineDispatcher()
@@ -166,8 +168,9 @@ object Scanner {
                     conn.value = Conn(true, car, t, text, error = !car, adapter = Section.of(r.getJSONObject("adapter")))
                     results.value = emptyMap()
                 }
-            } catch (e: Exception) {
-                conn.value = Conn(message = "No adapter: ${e.message}", error = true)
+            } catch (e: Exception) {  // phone.py answers ok=false for the adapter; this is the app itself
+                Log.e(TAG, "connect", e)  // a PyException's stack trace carries the Python traceback
+                conn.value = Conn(message = "Connect failed (an app bug, not the adapter): ${e.message}", error = true)
             } finally {
                 busy.value = null
             }
@@ -236,6 +239,7 @@ object Scanner {
             try {
                 withContext(worker) { resultKey = key; Py.call("run", what, *args) }
             } catch (e: Exception) {
+                Log.e(TAG, "run $what", e)
                 addSection(key, Section("Error", listOf(Line(e.message ?: e.toString(), Tone.BAD))))
             } finally {
                 busy.value = null
@@ -247,7 +251,12 @@ object Scanner {
     fun clearCodes() = run("health", "Clearing codes...", "clear")
 
     /** summarize.py's text for one log (any thread: it doesn't touch the adapter). */
-    fun summary(f: File): String = Py.call("summary", f.absolutePath)
+    fun summary(f: File): String = try {
+        Py.call("summary", f.absolutePath)
+    } catch (e: Exception) {
+        Log.e(TAG, "summary", e)
+        "Couldn't summarize: ${e.message}"
+    }
 
     // --- drive log -----------------------------------------------------------------------
 
@@ -259,7 +268,13 @@ object Scanner {
         marks.clear()
         markCount = 0
         scope.launch {
-            val prep = withContext(worker) { JSONObject(Py.call("log_prepare", set, honda, tag, logsDir.absolutePath)) }
+            val prep = try {
+                withContext(worker) { JSONObject(Py.call("log_prepare", set, honda, tag, logsDir.absolutePath)) }
+            } catch (e: Exception) {  // uncaught here, it would take the app down
+                Log.e(TAG, "log_prepare", e)
+                toast.value = "Couldn't start the log: ${e.message}"
+                return@launch
+            }
             if (prep.has("error")) { toast.value = prep.getString("error"); return@launch }
             val tiles = prep.getJSONArray("tiles").let { a -> List(a.length()) { a.getJSONArray(it).let { p -> p.getString(0) to p.getString(1) } } }
             val cols = prep.getJSONArray("columns").length()
@@ -271,6 +286,7 @@ object Scanner {
                 log.value = log.value.copy(running = false, status = done.getString("status"))
                 if (!done.getBoolean("connected")) conn.value = conn.value.copy(connected = false, error = true, message = "Lost the car; reconnect.")
             } catch (e: Exception) {
+                Log.e(TAG, "log_run", e)
                 log.value = log.value.copy(running = false, status = "error: ${e.message}")
             } finally {
                 LogService.stop(ctx)

@@ -354,7 +354,7 @@ fun LogsTab() {
     LaunchedEffect(log.running, log.rows / 50) { files = Scanner.logFiles() }
     LaunchedEffect(open) {
         summary = open?.let { f -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try { Scanner.summary(f) } catch (e: Exception) { "Couldn't summarize: ${e.message}" }
+            Scanner.summary(f)
         } } ?: ""
     }
     fun share(f: File) {
