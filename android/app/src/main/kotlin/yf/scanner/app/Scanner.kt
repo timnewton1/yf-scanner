@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -90,7 +92,9 @@ object Scanner {
     private val ring = ArrayDeque<String>()
     private var lastPush = 0L
 
-    private fun addSection(key: String, s: Section) { results.value = results.value + (key to (results.value[key].orEmpty() + s)) }
+    // The hooks run on the adapter thread while the screens change the same state on the main
+    // thread: every read-modify-write goes through update {}, so neither overwrites the other.
+    private fun addSection(key: String, s: Section) = results.update { it + (key to (it[key].orEmpty() + s)) }
 
     private val hooks = object : PyHooks {
         override fun openLink(address: String): Link = BleLink(ctx, address).open()
@@ -110,15 +114,17 @@ object Scanner {
             val o = JSONObject(json)
             val c = o.getJSONObject("cells")
             val marker = o.getString("marker")
-            val s = log.value
             val rows = o.getInt("rows")
             val secs = o.getDouble("seconds")
-            log.value = s.copy(rows = rows, seconds = secs, cells = c.keys().asSequence().associateWith { c.getString(it) },
-                lastMarker = if (marker.isNotEmpty()) "'$marker' at %.0f s".format(secs) else s.lastMarker)
+            val cells = c.keys().asSequence().associateWith { c.getString(it) }
+            val s = log.updateAndGet {
+                it.copy(rows = rows, seconds = secs, cells = cells,
+                    lastMarker = if (marker.isNotEmpty()) "'$marker' at %.0f s".format(secs) else it.lastMarker)
+            }
             if (rows % 20 == 0) LogService.update(ctx, "$rows rows, ${s.file?.name}")
         }
 
-        override fun status(text: String) { log.value = log.value.copy(status = text) }
+        override fun status(text: String) = log.update { it.copy(status = text) }
 
         override fun stopRequested() = stopLog
 
@@ -235,7 +241,7 @@ object Scanner {
         if (busy.value != null) return
         scope.launch {
             busy.value = label
-            results.value = results.value + (key to emptyList())
+            results.update { it + (key to emptyList()) }
             try {
                 withContext(worker) { resultKey = key; Py.call("run", what, *args) }
             } catch (e: Exception) {
@@ -283,11 +289,11 @@ object Scanner {
             LogService.start(ctx, c.target != "DEMO")
             try {
                 val done = withContext(worker) { JSONObject(Py.call("log_run")) }
-                log.value = log.value.copy(running = false, status = done.getString("status"))
-                if (!done.getBoolean("connected")) conn.value = conn.value.copy(connected = false, error = true, message = "Lost the car; reconnect.")
+                log.update { it.copy(running = false, status = done.getString("status")) }
+                if (!done.getBoolean("connected")) conn.update { it.copy(connected = false, error = true, message = "Lost the car; reconnect.") }
             } catch (e: Exception) {
                 Log.e(TAG, "log_run", e)
-                log.value = log.value.copy(running = false, status = "error: ${e.message}")
+                log.update { it.copy(running = false, status = "error: ${e.message}") }
             } finally {
                 LogService.stop(ctx)
             }
@@ -301,6 +307,6 @@ object Scanner {
         if (!log.value.running) return
         val m = text ?: "mark${++markCount}"
         marks.add(m)
-        log.value = log.value.copy(lastMarker = "'$m' (next row)")
+        log.update { it.copy(lastMarker = "'$m' (next row)") }
     }
 }
