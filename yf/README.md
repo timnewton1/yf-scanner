@@ -99,7 +99,7 @@ The log summary line reports link quality: how many requests were retried becaus
 | `obd2/` | SAE J1979 decoding: Mode 01 PIDs, readiness, trouble codes, Mode 06 |
 | `sim/` | Simulated reference adapter + 2011 Pilot, modeled on the real one (`--port DEMO`, tests) |
 | `tests/` | Parser tests on captured replies; car, CLI, TUI, logger and transport tests against the simulator |
-| `tools/summarize.py` | Warm-up, charging, trims by condition, bank difference, VCM, markers |
+| `tools/summarize.py` | Timeline, warm-up, charging, trims by condition (coasting apart), bank difference, long-term trim changes, VCM, markers |
 | `setup/` | `setup.sh` (Linux/WSL/Pi), `windows.ps1`, `wsl-attach-bluetooth.ps1`, `pi-logger.sh` |
 | `docs/` | [adapters](docs/adapters.md), [platforms](docs/platforms.md), [honda-enhanced](docs/honda-enhanced.md) |
 

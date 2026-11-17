@@ -1,6 +1,7 @@
-"""Summarize a yf_scan CSV: warm-up, charging, fuel trims by driving condition, and every noise marker.
+"""Summarize a yf_scan CSV: a timeline, warm-up, charging, fuel trims by driving condition (coasting
+apart), how the long-term trims moved, and every noise marker.
 
-    python3 yf/tools/summarize.py yf/logs/yf_XXXX.csv [marker_window_seconds]
+    python3 yf/tools/summarize.py yf/logs/yf_XXXX.csv [marker_window_seconds] [timeline_step_seconds]
 
 The trim thresholds printed are common rules of thumb, not Honda specs.
 """
@@ -11,6 +12,7 @@ import sys
 
 path = sys.argv[1]
 WIN = float(sys.argv[2]) if len(sys.argv) > 2 else 3.0
+STEP = float(sys.argv[3]) if len(sys.argv) > 3 else 30.0
 
 rows = list(csv.DictReader(open(path, encoding="utf-8")))
 if not rows:
@@ -50,6 +52,25 @@ if link:
           + ", ".join(f"{num(r, 'elapsed_s'):.0f} s" for r in link if r["marker"].startswith("link lost")))
 rows = data_rows
 
+# timeline: one row every STEP seconds, plus the last row; columns the log doesn't have are left out
+TL = [("rpm", "rpm", 5, "5.0f"), ("mph", "mph", 4, "4.0f"), ("load %", "load", 4, "4.0f"), ("throttle %", "thr", 4, "4.0f"),
+      ("coolant F", "ect", 4, "4.0f"), ("STFT1 %", "st1", 6, "+6.1f"), ("LTFT1 %", "lt1", 6, "+6.1f"),
+      ("STFT2 %", "st2", 6, "+6.1f"), ("LTFT2 %", "lt2", 6, "+6.1f"), ("volts", "V", 5, "5.1f")]
+TL = [c for c in TL if col(c[0])]
+print(f"\nTimeline, every {STEP:.0f} s:")
+print(f"{'t':>6} " + " ".join(f"{h:>{w}}" for _, h, w, _ in TL) + "  marker")
+next_t = 0.0
+for r in rows:
+    tr = num(r, "elapsed_s")
+    if tr is None or not (tr >= next_t or r is rows[-1]):
+        continue
+    next_t = tr + STEP
+    cells = []
+    for k, _, w, f in TL:
+        x = num(r, k)
+        cells.append(f"{x:{f}}" if x is not None else f"{'-':>{w}}")
+    print(f"{tr:6.0f} " + " ".join(cells) + (f"  {r['marker']}" if r.get("marker") else ""))
+
 # warm-up
 ect = [(num(r, "elapsed_s"), num(r, "coolant F")) for r in rows if num(r, "coolant F") is not None]
 if ect:
@@ -61,14 +82,22 @@ v = col("volts")
 if v:
     print(f"Charging voltage: {stats(v)}  (rule of thumb: ~13.5-14.8 V running)")
 
-# trims by condition
+# trims by condition. Coasting (moving, throttle closed) gets its own band so it doesn't blur city/highway.
+# Closed throttle is taken as within 2 points of the lowest throttle % seen at idle (or in the whole log if
+# it never idled), because the absolute throttle PID doesn't read 0 % when closed.
 moving = lambda r: (num(r, "mph") or 0)
+thr = col("throttle %", [r for r in rows if moving(r) == 0]) or col("throttle %")
+closed_at = min(thr) + 2 if thr else None
+coasting = lambda r: closed_at is not None and moving(r) > 5 and (num(r, "throttle %") or 100) <= closed_at
 bands = [
     ("idle (0 mph)", lambda r: moving(r) == 0 and (num(r, "rpm") or 0) > 400),
-    ("city (1-40 mph)", lambda r: 0 < moving(r) <= 40),
-    ("highway (>40 mph)", lambda r: moving(r) > 40),
+    ("city (1-40 mph, throttle open)", lambda r: 0 < moving(r) <= 40 and not coasting(r)),
+    ("highway (>40 mph, throttle open)", lambda r: moving(r) > 40 and not coasting(r)),
 ]
-print("\nFuel trims, % (sustained total STFT+LTFT beyond about +/-10 % is worth a look):")
+if closed_at is not None:
+    bands.append((f"coasting (>5 mph, throttle <= {closed_at:.0f} %)", coasting))
+print("\nFuel trims, % (sustained total STFT+LTFT beyond about +/-10 % is worth a look; "
+      "trims while coasting can swing hard if the PCM cuts fuel, so read that band on its own):")
 for name, sel in bands:
     rs = [r for r in rows if sel(r)]
     if not rs:
@@ -87,6 +116,21 @@ l1, l2 = col("LTFT1 %"), col("LTFT2 %")
 if l1 and l2:
     print(f"  LTFT bank difference (1 minus 2): {st.mean(l1) - st.mean(l2):+.1f} %  (one bank off alone points at that bank: "
           "vacuum leak, injector, A/F sensor)")
+
+# how the long-term trims moved over the drive
+for b in ("1", "2"):
+    pts = [(num(r, "elapsed_s"), num(r, f"LTFT{b} %")) for r in rows]
+    pts = [(tt, x) for tt, x in pts if tt is not None and x is not None]
+    if not pts:
+        continue
+    changes = [(tt, x) for (tt, x), (_, prev) in zip(pts[1:], pts) if x != prev]
+    lo, hi = min(x for _, x in pts), max(x for _, x in pts)
+    line = (f"LTFT{b}: start {pts[0][1]:+.1f} %, end {pts[-1][1]:+.1f} %, range {lo:+.1f} to {hi:+.1f} %, "
+            f"{len(changes)} change{'s' if len(changes) != 1 else ''}")
+    if changes:
+        shown = ", ".join(f"{x:+.1f} at {tt:.0f} s" for tt, x in changes[:12])
+        line += f": {shown}" + (f", ... {len(changes) - 12} more" if len(changes) > 12 else "")
+    print(("\n" if b == "1" else "") + line)
 
 # optional Honda candidate columns
 for k in ("ATF F (candidate)", "VCM cylinders (candidate)"):
