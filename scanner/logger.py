@@ -32,6 +32,25 @@ SETS = {
     "all": [p.name for p in pids.TABLE],
 }
 
+# Quick mode (--quick, the Quick switch): seconds between reads of each value, so each row is about
+# one request plus at most one more. 0 = every row, None = once per log. Values not listed: QUICK_DEFAULT.
+# Fast: the noise set (tells rpm-, speed- and load-linked noises apart) and VCM, which switches in
+# about a second. About 10 s: trims, airflow, temperatures, sensors. About 60 s and once: values that
+# move slowly or not at all during a drive.
+QUICK_DEFAULT = 10.0
+QUICK_EVERY = {
+    **dict.fromkeys(SETS["noise"] + ["VCM_CYLINDERS"], 0),
+    **dict.fromkeys(["CATALYST_TEMP_B1S1", "CATALYST_TEMP_B2S1", "EVAP_VAPOR_PRESSURE", "BAROMETRIC_PRESSURE",
+                     "FUEL_LEVEL", "AMBIANT_AIR_TEMP", "RUN_TIME", "DISTANCE_W_MIL", "DISTANCE_SINCE_DTC_CLEAR"], 60.0),
+    **dict.fromkeys(["WARMUPS_SINCE_DTC_CLEAR", "COMMANDED_EGR", "EGR_ERROR"], None),
+}
+QUICK_EXTRA = 6  # slower values asked per row at most (one Mode 01 request), most overdue first
+
+
+def quick_every(name):
+    return QUICK_EVERY.get(name, QUICK_DEFAULT)
+
+
 LIVE_LINE = ["RPM", "SPEED", "ENGINE_LOAD", "COOLANT_TEMP", "SHORT_FUEL_TRIM_1", "LONG_FUEL_TRIM_1",
              "SHORT_FUEL_TRIM_2", "LONG_FUEL_TRIM_2", "CONTROL_MODULE_VOLTAGE"]
 
@@ -110,11 +129,17 @@ class Markers:
 class Logger:
     retry_delay = 3.0  # seconds between reconnect attempts
 
-    def __init__(self, car, names, with_honda=False, reopen=None, quiet=False):
-        """car: an open Car. reopen: callable() -> Car, used to reconnect after a dropped link."""
+    def __init__(self, car, names, with_honda=False, reopen=None, quiet=False, quick=False, clock=time.monotonic):
+        """car: an open Car. reopen: callable() -> Car, used to reconnect after a dropped link.
+        quick: read each value only as often as QUICK_EVERY says; a row then has cells only for what
+        it read (the rest are blank in the CSV), and `latest` holds the last value of every column."""
         self.car = car
         self.reopen = reopen
         self.quiet = quiet
+        self.quick = quick
+        self.clock = clock
+        self.latest = {}   # column -> last value read, for screens (a quick row reads only some)
+        self.due = {}      # quick: column -> when it's next read (None: never again); absent = now
         eng = car.modules.get(car.engine)
         self.skipped = [n for n in names if eng is None or pids.BY_NAME[n].pid not in eng.pids]
         self.names = [n for n in names if n not in self.skipped]
@@ -125,10 +150,39 @@ class Logger:
         return self.names + [c["name"] for c in self.extras]
 
     def row(self):
-        cells = self.car.read(self.names)
-        for c in self.extras:
+        """Read one row -> {column: value}. Quick mode returns only the columns it read, which can be
+        none when the set has no fast values and nothing slower is due yet."""
+        names, extras = self.names, self.extras
+        if self.quick:
+            names, extras = self._due_now()
+        cells = self.car.read(names) if names else {}
+        for c in extras:
             cells[c["name"]] = self.car.honda(c)[0]
+        if self.quick:
+            now = self.clock()
+            for n, v in cells.items():
+                every = quick_every(n)
+                if every:
+                    self.due[n] = now + every
+                elif every is None:  # once: again later only if it didn't answer
+                    self.due[n] = None if v is not None else now + QUICK_DEFAULT
+        self.latest.update(cells)
         return cells
+
+    def _due_now(self):
+        """Quick mode: the Mode 01 names and Honda candidates to read this row."""
+        now = self.clock()
+        due = lambda n: n not in self.due or (self.due[n] is not None and self.due[n] <= now)
+        fast = [n for n in self.names if quick_every(n) == 0]
+        slow = sorted((n for n in self.names if quick_every(n) != 0 and due(n)), key=lambda n: self.due.get(n, 0))
+        extras = [c for c in self.extras if quick_every(c["name"]) == 0 or due(c["name"])]
+        return fast + slow[:QUICK_EXTRA], extras
+
+    def idle(self):
+        """Quick mode, nothing to read this row: wait (at most 0.25 s, so Stop stays quick) for the
+        next value due."""
+        nxt = [t for t in self.due.values() if t is not None]
+        time.sleep(max(0.0, min(0.25, min(nxt) - self.clock())) if nxt else 0.25)
 
     def reconnect(self, give_up_after=None):
         """Keep trying to reopen the car. Returns True when connected, False if give_up_after
@@ -151,7 +205,8 @@ class Logger:
         return False
 
     def run(self, log, markers, seconds=None, stop_when=None, link_patience=None):
-        """Write rows until Ctrl+C, `seconds`, or stop_when(cells) returns True.
+        """Write rows until Ctrl+C, `seconds`, or stop_when(latest) returns True (latest: every column's
+        last value, which in quick mode is more than the row just read).
         A dropped link is retried (forever, or for link_patience seconds) and marked in the log."""
         stop_at = time.monotonic() + seconds if seconds else None
         tty = sys.stdout.isatty() and not self.quiet
@@ -161,6 +216,11 @@ class Logger:
             try:
                 cells = self.row()
                 slow = 0
+                if not cells:  # quick, nothing due yet
+                    if stop_when and stop_when(dict(self.latest)):
+                        return "stopped"
+                    self.idle()
+                    continue
             except NoPrompt as e:
                 slow += 1
                 if slow < 3:  # one slow reply isn't a lost link; three in a row is
@@ -185,16 +245,17 @@ class Logger:
             if marker and not self.quiet:
                 print(f"\n  marker '{marker}' at {time.monotonic() - log.t0:.1f} s")
             if not self.quiet:
-                line = "  ".join(f"{label(n)} {'' if cells.get(n) is None else cells[n]}" for n in LIVE_LINE if n in cells)
+                shown = self.latest
+                line = "  ".join(f"{label(n)} {'' if shown.get(n) is None else shown[n]}" for n in LIVE_LINE if n in shown)
                 print(("\r" if tty else "") + line + "   ", end="" if tty else "\n", flush=True)
-            if stop_when and stop_when(cells):
+            if stop_when and stop_when(dict(self.latest)):  # what screens show: every column's last value
                 return "stopped"
         return "time"
 
 
-def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, directory=None):
+def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, directory=None, quick=False):
     """Interactive drive log (the default command)."""
-    lg = Logger(car, names, with_honda, reopen)
+    lg = Logger(car, names, with_honda, reopen, quick=quick)
     if not lg.names:
         sys.exit("None of the requested PIDs are supported by the engine module.")
     if lg.skipped:
@@ -204,7 +265,8 @@ def drive(car, names, seconds=None, tag=None, with_honda=False, reopen=None, dir
     if sys.stdin.isatty():
         markers.from_stdin()
         print("Press Enter to drop a marker when you hear something; type a word first (e.g. 'whine') to label it.")
-    print(f"Logging {len(lg.columns)} values to {log.path}  (Ctrl+C to stop)", flush=True)
+    how = " (quick: the noise values every row, the rest every 10-60 s)" if quick else ""
+    print(f"Logging {len(lg.columns)} values{how} to {log.path}  (Ctrl+C to stop)", flush=True)
     try:
         lg.run(log, markers, seconds)
     except KeyboardInterrupt:
@@ -224,7 +286,7 @@ def saved_line(log, car):
 
 
 def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", idle_stop=20.0,
-               directory=None):
+               directory=None, quick=False):
     """For a Raspberry Pi in the car: wait for the adapter and a running engine, log the drive to
     its own file, close it when the engine has been off for idle_stop seconds, repeat. Never exits
     on its own; stop it with Ctrl+C or systemctl stop."""
@@ -254,7 +316,7 @@ def unattended(open_car, names, with_honda=False, gpio_button=None, tag="auto", 
             car.close()
             time.sleep(10)
             continue
-        lg = Logger(car, names, with_honda, reopen=open_car, quiet=True)
+        lg = Logger(car, names, with_honda, reopen=open_car, quiet=True, quick=quick)
         log = CsvLog(lg.columns, tag, directory)
         say(f"engine running ({rpm:.0f} rpm): logging to {log.path}")
         off_since = [None]
