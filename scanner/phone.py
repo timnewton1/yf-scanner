@@ -106,9 +106,25 @@ def hello():
                  likely_name=ble.LIKELY_NAME.pattern)
 
 
+_hook_failed = set()
+
+
+def _tell(name, *args):
+    """Call a display hook (traffic, section, row, status). They run Kotlin UI code inside a read or
+    a drive log; an exception there is printed to logcat (once per hook), never raised into the
+    read, where it would end a drive log or look like a lost adapter."""
+    if _hooks is None:
+        return
+    try:
+        getattr(_hooks, name)(*args)
+    except Exception:
+        if name not in _hook_failed:
+            _hook_failed.add(name)
+            traceback.print_exc()
+
+
 def _traffic(direction, text):
-    if _hooks is not None:
-        _hooks.traffic(direction, text)
+    _tell("traffic", direction, text)
 
 
 def _open(target):
@@ -182,7 +198,7 @@ def run(what, *args):
 
     def emit(s):
         out.append(s)
-        _hooks.section(json.dumps(s.as_dict()))
+        _tell("section", json.dumps(s.as_dict()))
 
     if _car is None or not _car.connected:
         emit(Section("Not connected").add("Connect to the car first (Connect tab).", "warn"))
@@ -209,11 +225,11 @@ class _AppLog(logger.CsvLog):
     def write(self, cells, marker=""):
         super().write(cells, marker)
         if marker.startswith("link lost"):
-            _hooks.status(f"Link lost ({marker[len('link lost: '):]}). Reconnecting...")
+            _tell("status", f"Link lost ({marker[len('link lost: '):]}). Reconnecting...")
         elif marker == "reconnected":
-            _hooks.status("Reconnected.")
+            _tell("status", "Reconnected.")
         elif marker != "timeout":
-            _hooks.row(_json(cells={n: report.fmt(v) for n, v in cells.items()}, marker=marker, rows=self.rows,
+            _tell("row", _json(cells={n: report.fmt(v) for n, v in cells.items()}, marker=marker, rows=self.rows,
                              seconds=round(time.monotonic() - self.t0, 1)))
 
 

@@ -178,6 +178,46 @@ class TestConnectFails(unittest.TestCase):
         self.assertIn("Connect to the car first", phone.run("codes"))
 
 
+class TestHooksThatThrow(unittest.TestCase):
+    """A Kotlin exception in a display hook (a notification refused, a JSON slip in the UI) reaches
+    Python as an exception. It mustn't end a drive log or a read."""
+
+    def setUp(self):
+        class Throwing(Hooks):
+            def row(self, js):
+                super().row(js)
+                raise RuntimeError("SecurityException: posting a notification")
+
+            def section(self, js):
+                super().section(js)
+                raise RuntimeError("JSONException")
+        self.h = Throwing()
+        self.assertTrue(json.loads(phone.connect("DEMO", self.h))["ok"])
+        self.printed = mock.patch.object(phone.traceback, "print_exc").start()
+        self.addCleanup(mock.patch.stopall)
+        self.addCleanup(phone._hook_failed.clear)
+
+    def tearDown(self):
+        phone.disconnect()
+
+    def test_read_returns_every_section(self):
+        out = json.loads(phone.run("health"))
+        self.assertGreater(len(out), 3)
+        self.assertEqual(len(out), len(self.h.sections))
+        self.printed.assert_called_once()  # logged once, not once per section
+
+    def test_drive_log_keeps_going(self):
+        def each(row):
+            if len(self.h.rows) == 4:
+                self.h.stop.set()
+        self.h.on_row = each
+        with tempfile.TemporaryDirectory() as d:
+            json.loads(phone.log_prepare("drive", False, "", d))
+            done = json.loads(phone.log_run())
+        self.assertEqual(done["why"], "stopped")
+        self.assertEqual(len(self.h.rows), 4)
+
+
 class TestOnAndroid(unittest.TestCase):
     def test_imports_and_demo_where_sys_platform_is_android(self):
         """On the phone sys.platform is 'android', which some of pyserial refuses to import on."""
