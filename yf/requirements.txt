@@ -1,3 +1,3 @@
-obd>=0.7.3
 pyserial>=3.5
-bleak>=0.22  # BLE adapters only; USB, rfcomm and Wi-Fi work without it
+bleak>=0.22  # BLE adapters only; USB, rfcomm, Wi-Fi and DEMO work without it
+# Raspberry Pi marker button (--gpio-button) only:  pip install gpiozero

@@ -1,6 +1,6 @@
 """pyserial URL handler: serial.serial_for_url("ble://<address or name>[?notify=<uuid>&write=<uuid>]").
 
-Registered by elm/__init__.py. python-OBD opens its port with serial_for_url, so once this is
+Registered by elm/__init__.py. adapter.open_port() opens every port with serial_for_url, so once this is
 registered it talks to a BLE adapter exactly as it does to a USB one. Baud rate and framing
 settings are accepted and ignored: there is no UART on this side of the radio.
 """

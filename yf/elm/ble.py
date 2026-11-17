@@ -8,14 +8,16 @@ clone, so this module knows the common layouts and, failing those, picks any ser
 notify + write pair, probing with a harmless `ATI` when more than one could be it.
 
 BleLink is a blocking byte pipe (read/write/close) over that pair, with bleak running on a
-background event loop. protocol_ble.py wraps it as a pyserial port for python-OBD.
+background event loop. protocol_ble.py wraps it as a pyserial port for the session (session.py).
 
-Linux: needs BlueZ running (`systemctl start bluetooth`). No pairing, no rfcomm. Most BLE
-adapters take one connection at a time, so close any phone app that is connected to it.
+Linux: needs BlueZ running (`systemctl start bluetooth`). No pairing, no rfcomm. Windows and macOS
+use the OS Bluetooth stack through bleak. Most BLE adapters take one connection at a time, so close
+any phone app that is connected to it.
 """
 
 import asyncio
 import re
+import sys
 import threading
 import time
 
@@ -59,6 +61,22 @@ LIKELY_NAME = re.compile(r"obd|elm|v-?link|vgate|veepeak|viecar|konnwei|icar|car
                          r"kiwi|viabecs|ymobd|scan", re.I)
 
 ADDRESS = re.compile(r"^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$|^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$", re.I)
+
+
+def hint(err=""):
+    """What to try for a BLE failure, for this OS."""
+    e = str(err)
+    if "BREDR" in e or "ProfileUnavailable" in e or "br-connection" in e:
+        return ("BlueZ tried classic Bluetooth on an LE-only adapter. Set 'ControllerMode = le' in "
+                "/etc/bluetooth/main.conf and restart bluetooth (yf/setup/wsl-bluetooth.sh does this)")
+    if sys.platform == "win32":
+        return "Is Bluetooth on (Settings > Bluetooth & devices)? Close any phone app connected to the adapter"
+    if sys.platform == "darwin":
+        return "Is Bluetooth on, and has the terminal been allowed to use it (System Settings > Privacy)?"
+    if "org.bluez" in e or "ServiceUnknown" in e:
+        return ("BlueZ isn't running or there's no radio. Linux: sudo systemctl start bluetooth. "
+                "WSL: attach the radio with usbipd first (yf/setup/wsl-attach-bluetooth.ps1)")
+    return "Is Bluetooth on (sudo systemctl start bluetooth)? Close any phone app connected to the adapter"
 
 
 def require_bleak():
@@ -143,7 +161,7 @@ def scan(seconds=6.0):
     try:
         found = _run(go())
     except BleakError as e:
-        raise LinkError(f"BLE scan failed: {e}. Is Bluetooth on (systemctl start bluetooth)?") from e
+        raise LinkError(f"BLE scan failed: {e}. {hint(e)}") from e
     out = []
     for addr, (dev, adv) in found.items():
         name = adv.local_name or dev.name or ""
@@ -238,7 +256,7 @@ class BleLink:
             with self._cv:
                 self._buf.clear()
         except BleakError as e:
-            raise LinkError(f"BLE: {e}. Is Bluetooth on (systemctl start bluetooth)?") from e
+            raise LinkError(f"BLE: {e}. {hint(e)}") from e
 
     async def _close(self):
         if self.channel is not None and self.client.is_connected:
@@ -321,6 +339,6 @@ class BleLink:
         return lines
 
 
-# The most recently opened link, so adapter.py can describe it (python-OBD keeps the port private).
+# The most recently opened link, so adapter.py can describe it (the pyserial wrapper hides it).
 last_link = None
 last_error = None

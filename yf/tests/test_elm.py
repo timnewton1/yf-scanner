@@ -1,7 +1,7 @@
-"""The shared ELM327 layer, end to end through python-OBD, over a simulated BLE adapter and a pty
-standing in for a USB one. No radio or hardware needed.
+"""The transports, end to end through the real session and car layer: a simulated BLE adapter
+and a pty standing in for a USB one, both with the simulated Pilot behind them. No radio needed.
 
-    .venv/bin/python -m unittest discover yf/tests -v
+    .venv/bin/python -m unittest discover -s yf/tests -v
 """
 
 import asyncio
@@ -12,13 +12,15 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import obd  # noqa: E402
-
 import elm  # noqa: E402
+from car import Car  # noqa: E402
 from elm import ble  # noqa: E402
-from elm_sim import ElmSim  # noqa: E402
+from sim.elm import ElmEmulator  # noqa: E402
+from sim.pilot import Pilot  # noqa: E402
 
-obd.logger.setLevel(obd.logging.CRITICAL)
+
+def ElmSim():
+    return ElmEmulator(Pilot())
 
 U = ble._u
 
@@ -143,6 +145,8 @@ class TestPortNames(unittest.TestCase):
         self.assertEqual(elm.normalize("ble"), "ble://")
         self.assertEqual(elm.normalize("ble:AA:BB:CC:DD:EE:FF"), "ble://AA:BB:CC:DD:EE:FF")
         self.assertEqual(elm.normalize("/dev/ttyUSB0"), "/dev/ttyUSB0")
+        self.assertEqual(elm.normalize("DEMO"), "sim://pilot")
+        self.assertEqual(elm.kind("sim://pilot"), "simulator")
         self.assertEqual(elm.kind("ble://x"), "BLE")
         self.assertEqual(elm.kind("socket://192.168.0.10:35000"), "Wi-Fi")
         self.assertEqual(elm.kind("/dev/rfcomm0"), "Bluetooth Classic")
@@ -153,6 +157,7 @@ class TestClassify(unittest.TestCase):
     def test_types(self):
         c = elm.adapter.classify
         self.assertEqual(c({"chip": "ELM327 v1.5", "stn": "?"}, "BLE")[0], elm.REFERENCE["name"])
+        self.assertEqual(c({"chip": "ELM327 v1.5", "stn": "OK"}, "BLE")[0], elm.REFERENCE["name"])
         self.assertEqual(c({"chip": "ELM327 v2.1", "stn": "?"}, "BLE")[0], "v2.1 clone")
         self.assertEqual(c({"chip": "ELM327 v1.4b", "stn": "STN2120 v5.6.19"}, "USB/serial")[0], "STN")
         self.assertEqual(c({"chip": "?", "stn": "?"}, "BLE")[0], "unknown")
@@ -187,20 +192,20 @@ class TestChannels(unittest.TestCase):
 
 
 class TestBle(BleTestCase):
-    def test_python_obd_over_ble(self):
+    def test_car_over_ble(self):
         a = ref_adapter()
         WORLD.append(a)
-        ad = elm.connect("ble:AA:BB:CC:DD:EE:01")
+        car = Car.open("ble:AA:BB:CC:DD:EE:01")
         try:
-            self.assertEqual(ad.conn.status(), obd.OBDStatus.CAR_CONNECTED)
-            self.assertEqual(ad.kind, "BLE")
-            self.assertEqual(ad.conn.query(obd.commands.RPM).value.magnitude, 1726)
-            self.assertEqual(ad.ident["chip"], "ELM327 v1.5")
-            self.assertEqual(ad.ident["type"], elm.REFERENCE["name"])
-            self.assertNotIn("\x7f\x7f", a.sim.sent, "baud probe should be skipped on BLE")
-            self.assertIn("FFF0", str(ad.link.channel))
+            self.assertTrue(car.connected)
+            self.assertEqual(car.adapter.kind, "BLE")
+            self.assertGreater(car.read(["RPM"])["RPM"], 500)
+            self.assertEqual(car.adapter.ident["chip"], "ELM327 v1.5")
+            self.assertEqual(car.adapter.ident["type"], elm.REFERENCE["name"])
+            self.assertNotIn("\x7f\x7fATI", a.sim.sent, "baud probe should be skipped on BLE")
+            self.assertIn("FFF0", str(car.adapter.link.channel))
         finally:
-            ad.conn.close()
+            car.close()
 
     def test_scan_picks_the_one_adapter(self):
         WORLD.append(ref_adapter())
@@ -208,7 +213,7 @@ class TestBle(BleTestCase):
         try:
             self.assertEqual(ad.url, "ble://AA:BB:CC:DD:EE:01")
         finally:
-            ad.conn.close()
+            ad.close()
 
     def test_probe_finds_the_wired_pipe(self):
         """A clone with two plausible pipes where only the second reaches the ELM chip."""
@@ -218,31 +223,30 @@ class TestBle(BleTestCase):
         WORLD.append(a)
         ad = elm.connect("ble:AA:BB:CC:DD:EE:01")
         try:
-            self.assertEqual(ad.conn.status(), obd.OBDStatus.CAR_CONNECTED)
+            self.assertTrue(ad.car)
             self.assertIn("FFE0", str(ad.link.channel))
         finally:
-            ad.conn.close()
+            ad.close()
 
     def test_not_in_range(self):
         with self.assertRaises(elm.adapter.NotConnected) as cm:
             elm.connect("ble:AA:BB:CC:DD:EE:99")
         self.assertIn("not seen", str(cm.exception))
 
-    def test_dropped_link_does_not_hang(self):
+    def test_dropped_link_raises_link_lost(self):
         a = ref_adapter()
         WORLD.append(a)
-        ad = elm.connect("ble:AA:BB:CC:DD:EE:01")
+        car = Car.open("ble:AA:BB:CC:DD:EE:01")
         a.client.drop()
-        r = ad.conn.query(obd.commands.SPEED)
-        self.assertTrue(r.is_null())
-        self.assertEqual(ad.conn.status(), obd.OBDStatus.NOT_CONNECTED)
-        ad.conn.close()
+        with self.assertRaises(elm.LinkLost):
+            car.read(["SPEED"])
+        car.close()
 
 
 class TestSerial(unittest.TestCase):
-    """Same layer, same python-OBD, over a pty: what a USB adapter looks like to the laptop."""
+    """Same layers over a pty: what a USB adapter looks like to the laptop (baud rate probed)."""
 
-    def test_python_obd_over_pty(self):
+    def test_car_over_pty(self):
         master, slave = os.openpty()
         sim = ElmSim()
         stop = threading.Event()
@@ -258,14 +262,15 @@ class TestSerial(unittest.TestCase):
                     os.write(master, out)
 
         threading.Thread(target=serve, daemon=True).start()
-        ad = elm.connect(os.ttyname(slave))
+        car = Car.open(os.ttyname(slave))
         try:
-            self.assertEqual(ad.conn.status(), obd.OBDStatus.CAR_CONNECTED)
-            self.assertEqual(ad.kind, "USB/serial")
-            self.assertEqual(ad.conn.query(obd.commands.SPEED).value.magnitude, 50)
-            self.assertEqual(ad.ident["type"], elm.REFERENCE["name"])  # same firmware, different link
+            self.assertTrue(car.connected)
+            self.assertEqual(car.adapter.kind, "USB/serial")
+            self.assertEqual(car.read(["SPEED"])["SPEED"], 0.0)
+            self.assertEqual(car.adapter.ident["type"], elm.REFERENCE["name"])  # same firmware, different link
+            self.assertEqual(set(car.modules), {0x11, 0x1D})
         finally:
-            ad.conn.close()
+            car.close()
             stop.set()
             os.close(master)
             os.close(slave)
