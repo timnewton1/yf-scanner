@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ["YF_ADAPTER_FILE"] = os.path.join(tempfile.mkdtemp(), ".adapter")  # never the repo's own .adapter
@@ -22,6 +23,7 @@ class FakeLink:
 
     def __init__(self):
         self.port = serial.serial_for_url("sim://pilot?latency=0")
+        self.closed = False
 
     def write(self, data):
         if self.port.broken:
@@ -36,6 +38,7 @@ class FakeLink:
         self.port.reset_input_buffer()
 
     def close(self):
+        self.closed = True
         self.port.close()
 
     def info(self):
@@ -151,6 +154,28 @@ class TestPhone(unittest.TestCase):
             text = phone.summary(prep["path"])
             self.assertIn("'whine' at", text)
             self.assertIn("Link: 1 drop(s)", text)
+
+
+class TestConnectFails(unittest.TestCase):
+    def tearDown(self):
+        phone.disconnect()
+
+    def test_app_bug_after_link_opens_closes_the_link_and_says_bug(self):
+        h = Hooks()
+
+        class BadLink(FakeLink):
+            def info(self):
+                raise TypeError("'ArrayList' object is not iterable")
+        h.openLink = lambda address: h.links.append(BadLink()) or h.links[-1]
+        with mock.patch.object(phone.traceback, "print_exc") as printed:
+            r = json.loads(phone.connect("AA:BB:CC:DD:EE:01", h))
+        printed.assert_called_once()  # the traceback goes to logcat
+        self.assertFalse(r["ok"])
+        self.assertIn("app bug", r["message"])
+        self.assertIn("TypeError", r["message"])
+        self.assertFalse(r["message"].startswith("No adapter"))
+        self.assertTrue(h.links[-1].closed)  # the adapter is free for the next try
+        self.assertIn("Connect to the car first", phone.run("codes"))
 
 
 class TestOnAndroid(unittest.TestCase):

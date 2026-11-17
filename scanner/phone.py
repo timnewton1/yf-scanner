@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+import traceback
 
 from . import elm, logger, report
 from .car import Car, ElmError
@@ -123,27 +124,39 @@ def _open(target):
 
 
 def connect(target, hooks):
-    """target: a BLE address, or "DEMO" for the simulated Pilot."""
+    """target: a BLE address, or "DEMO" for the simulated Pilot. Whatever goes wrong after the link
+    opens, the link is closed again: a BLE adapter takes one connection at a time, so one left open
+    would refuse the next try."""
     global _hooks, _car, _target
     _hooks = hooks
     disconnect()
+    car = None
     try:
         car = _open(target)
         conn = report.connection(car)
+        ad = report.adapter(car.adapter)
     except (NotConnected, ElmError) as e:
+        _close(car)
         return _json(ok=False, message=f"No adapter: {e}")
+    except Exception as e:  # a bug here, not the adapter: say so, and leave the traceback in logcat
+        traceback.print_exc()
+        _close(car)
+        return _json(ok=False, message=f"Connect failed (an app bug, not the adapter): {type(e).__name__}: {_msg(e)}")
     _car, _target = car, target
-    return _json(ok=True, car=car.connected, target=target, connection=conn.as_dict(),
-                 adapter=report.adapter(car.adapter).as_dict())
+    return _json(ok=True, car=car.connected, target=target, connection=conn.as_dict(), adapter=ad.as_dict())
+
+
+def _close(car):
+    if car is not None:
+        try:
+            car.close()
+        except Exception:
+            pass
 
 
 def disconnect():
     global _car
-    if _car is not None:
-        try:
-            _car.close()
-        except Exception:
-            pass
+    _close(_car)
     _car = None
 
 
